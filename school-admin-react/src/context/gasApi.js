@@ -1,0 +1,71 @@
+const GAS_METHODS = [
+  'getDashboardStats',
+  'getAllStudents',
+  'getAllTeachers',
+  'getAllClasses',
+  'getAllFees',
+  'getClassFeeSettings',
+  'saveClassFeeSetting',
+  'getPendingFees',
+  'getPaidFees',
+  'getAllExams',
+  'getAllMarks',
+  'getMarksAdminData',
+  'getMarksTeacherData',
+  'getStudentStats',
+  'addStudent',
+  'updateStudent',
+  'setStudentStatus',
+  'getStudentsByClass',
+  'addTeacher',
+  'updateTeacher',
+  'addClass',
+  'deleteClass',
+  'addSchedule',
+  'getSchedule',
+  'deleteSchedule',
+  'markStudentAttendance',
+  'getStudentAttendanceForDay',
+  'getStudentAttendanceSummary',
+  'markTeacherAttendance',
+  'getTeacherAttendanceForDay',
+  'getTeacherAttSummary',
+  'addFeeRecord',
+  'deleteFeeRecord',
+  'addExam',
+  'deleteExam',
+  'addMarks',
+  'deleteMark',
+  'getReportCard',
+  'getBulkReportCards',
+  'getAuditLog',
+  'exportSchoolSnapshot',
+  'getScheduleForTeacherDay',
+  'getTimetables',
+  'addTimetable',
+  'deleteTimetable',
+  'getAnnouncements',
+  'addAnnouncement',
+  'deleteAnnouncement',
+  'getHomeworkForTeacher',
+  'addHomework',
+  'getHolidays',
+  'addHoliday',
+  'deleteHoliday',
+  'getWhatsAppLog',
+  'getWhatsAppIntegrationInfo',
+  'runScheduledParentNotifications',
+  'simulateWeeklyWhatsAppDigests',
+  'simulateMonthlyWhatsAppReports',
+];
+
+export function createGasApiProxy() {
+  const api = {};
+  GAS_METHODS.forEach((name) => {
+    api[name] = (...args) =>
+      new Promise((resolve, reject) => {
+        window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args);
+      });
+  });
+  return api;
+}

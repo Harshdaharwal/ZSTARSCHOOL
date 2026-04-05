@@ -1,0 +1,47 @@
+{
+  "schoolName": "Springdale Public School",
+  "tagline": "Bhopal, Madhya Pradesh · India",
+  "year": "2024-25",
+  "nav": {
+    "dashboard": "Dashboard",
+    "students": "Students",
+    "teachers": "Teachers",
+    "classes": "Classes",
+    "attStu": "Student Att.",
+    "attTch": "Teacher Att.",
+    "fees": "Fees",
+    "classFees": "Class fees",
+    "salary": "Salary",
+    "exams": "Exams",
+    "marks": "Marks & Results",
+    "results": "Student results",
+    "classNotices": "Class Notices",
+    "reports": "Report Cards",
+    "timetables": "Timetables",
+    "announcements": "Announcements",
+    "settings": "Settings & audit",
+    "menu": "Menu"
+  },
+  "login": {
+    "portalTitle": "School Portal",
+    "teacherTitle": "Teacher sign in",
+    "adminTitle": "Administrator sign in",
+    "signIn": "Sign in",
+    "signInAdmin": "Sign in as admin",
+    "adminLogin": "Admin login",
+    "teacherBack": "← Teacher sign in",
+    "firebaseHint": "School account — role is loaded from the school directory.",
+    "demoTeacher": "Demo — Teacher",
+    "demoAdmin": "Demo — Admin",
+    "email": "Email",
+    "password": "Password"
+  },
+  "topbar": {
+    "logout": "Log out",
+    "admin": "Admin",
+    "teacher": "Teacher"
+  },
+  "a11y": {
+    "skip": "Skip to main content"
+  }
+}

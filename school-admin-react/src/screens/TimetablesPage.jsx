@@ -1,0 +1,179 @@
+import { useCallback, useState } from 'react';
+import { Card, CardTitle } from '../components/common/Card.jsx';
+import { Button } from '../components/common/Button.jsx';
+import { SectionHeader } from '../components/common/SectionHeader.jsx';
+import { Spinner } from '../components/common/Spinner.jsx';
+import { useApi } from '../hooks/useApi.js';
+import { useAsyncResource } from '../hooks/useAsyncResource.js';
+import { useToast } from '../hooks/useToast.js';
+import { esc } from '../utils/format.js';
+
+const TYPES = ['Class', 'Test', 'Exam', 'Other'];
+
+export default function TimetablesPage() {
+  const api = useApi();
+  const { showToast } = useToast();
+  const load = useCallback(() => api.getTimetables(), [api]);
+  const { data: rows, loading, refresh } = useAsyncResource(load);
+
+  const submit = useCallback(
+    async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const res = await api.addTimetable({
+        type: fd.get('type'),
+        title: fd.get('title'),
+        cls: fd.get('cls'),
+        section: fd.get('section'),
+        day: fd.get('day'),
+        eventDate: fd.get('eventDate'),
+        timeSlot: fd.get('timeSlot'),
+        room: fd.get('room'),
+        subject: fd.get('subject'),
+        notes: fd.get('notes'),
+      });
+      showToast(res.msg, res.ok ? 'ok' : 'err');
+      if (res.ok) {
+        e.target.reset();
+        refresh();
+      }
+    },
+    [api, refresh, showToast]
+  );
+
+  const remove = useCallback(
+    async (id) => {
+      const res = await api.deleteTimetable(id);
+      showToast(res.msg, res.ok ? 'ok' : 'err');
+      if (res.ok) refresh();
+    },
+    [api, refresh, showToast]
+  );
+
+  if (loading && !rows) return <Spinner />;
+
+  return (
+    <>
+      <SectionHeader title="Timetables" />
+      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 16, fontWeight: 600 }}>
+        Manage class routines, tests, exams, and other scheduled events (demo / local backend).
+      </p>
+
+      <Card>
+        <CardTitle>Add timetable entry</CardTitle>
+        <form className="form-grid" onSubmit={submit}>
+          <div className="form-group">
+            <label>Type *</label>
+            <select name="type" required defaultValue="Class">
+              {TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Title *</label>
+            <input name="title" required placeholder="e.g. Mid-term Science" />
+          </div>
+          <div className="form-group">
+            <label>Class</label>
+            <select name="cls">
+              <option value="">—</option>
+              {[...Array(12)].map((_, i) => (
+                <option key={i + 1}>{i + 1}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Section</label>
+            <select name="section">
+              <option value="">—</option>
+              {['A', 'B', 'C', 'D'].map((x) => (
+                <option key={x}>{x}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Day (weekly)</label>
+            <select name="day">
+              <option value="">—</option>
+              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d) => (
+                <option key={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Event date (tests/exams)</label>
+            <input name="eventDate" placeholder="dd/mm/yyyy" />
+          </div>
+          <div className="form-group">
+            <label>Time slot</label>
+            <input name="timeSlot" placeholder="09:00–10:00" />
+          </div>
+          <div className="form-group">
+            <label>Room</label>
+            <input name="room" />
+          </div>
+          <div className="form-group">
+            <label>Subject</label>
+            <input name="subject" />
+          </div>
+          <div className="form-group full">
+            <label>Notes</label>
+            <textarea name="notes" rows={2} />
+          </div>
+          <div className="form-group full btn-row">
+            <Button type="submit">Save entry</Button>
+          </div>
+        </form>
+      </Card>
+
+      <Card style={{ marginTop: 24 }}>
+        <SectionHeader title="All entries" actions={<Button onClick={() => refresh()}>Refresh</Button>} />
+        <div className="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Title</th>
+                <th>Class</th>
+                <th>Sec</th>
+                <th>When</th>
+                <th>Time</th>
+                <th>Room</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {!rows?.length ? (
+                <tr>
+                  <td colSpan={8} className="empty" style={{ padding: 24 }}>
+                    No entries yet.
+                  </td>
+                </tr>
+              ) : (
+                rows.map((r) => (
+                  <tr key={r.Entry_ID}>
+                    <td>{esc(r.Type)}</td>
+                    <td>{esc(r.Title)}</td>
+                    <td>{esc(r.Class)}</td>
+                    <td>{esc(r.Section)}</td>
+                    <td>{esc(r.Event_Date || r.Day || '—')}</td>
+                    <td>{esc(r.Time_Slot)}</td>
+                    <td>{esc(r.Room)}</td>
+                    <td>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => remove(r.Entry_ID)}>
+                        Delete
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </>
+  );
+}

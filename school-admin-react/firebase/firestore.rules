@@ -1,0 +1,16 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Profile doc: /users/{uid} with fields role, teacherId?, studentIds?
+    // Only the signed-in user can read their own profile; school admin updates via Admin SDK or Console.
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Lock everything else until you model collections — then add explicit matches above this line.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
