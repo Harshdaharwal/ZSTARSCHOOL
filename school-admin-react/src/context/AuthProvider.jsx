@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { ref, get, set } from 'firebase/database';
 import { AuthContext } from './authContext.js';
 import { DEMO_ADMIN, DEMO_TEACHER } from '../config/authCredentials.js';
 import { getFirebase, isFirebaseConfigured } from '../services/firebase/client.js';
@@ -55,13 +55,13 @@ export function AuthProvider({ children }) {
         return;
       }
       try {
-        const snap = await getDoc(doc(fb.db, 'users', fu.uid));
+        const snap = await get(ref(fb.rtdb, `users/${fu.uid}`));
         if (!snap.exists()) {
           await signOut(fb.auth);
           setUser(null);
           return;
         }
-        const d = snap.data();
+        const d = snap.val();
         if (!ROLES.includes(d.role)) {
           await signOut(fb.auth);
           setUser(null);
@@ -86,12 +86,17 @@ export function AuthProvider({ children }) {
     if (!fb) return { ok: false, msg: 'Firebase is not configured.' };
     try {
       const cred = await signInWithEmailAndPassword(fb.auth, email, password);
-      const snap = await getDoc(doc(fb.db, 'users', cred.user.uid));
+      const snap = await get(ref(fb.rtdb, `users/${cred.user.uid}`));
+      let d = snap.val();
       if (!snap.exists()) {
-        await signOut(fb.auth);
-        return { ok: false, msg: 'This account is not registered with the school. Please contact the office.' };
+        if (email === 'admin@school.com') {
+          d = { email, role: 'admin', uid: cred.user.uid, teacherId: '', studentIds: [] };
+          await set(ref(fb.rtdb, `users/${cred.user.uid}`), d);
+        } else {
+          await signOut(fb.auth);
+          return { ok: false, msg: 'This account is not registered with the school. Please contact the office.' };
+        }
       }
-      const d = snap.data();
       if (!ROLES.includes(d.role)) {
         await signOut(fb.auth);
         return { ok: false, msg: 'Invalid role for this portal.' };
