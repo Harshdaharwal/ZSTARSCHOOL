@@ -11,6 +11,7 @@
     "firebase:export-seed": "node scripts/firebase/exportSeedData.mjs",
     "firebase:migrate-firestore": "node scripts/firebase/migrateToFirestore.mjs",
     "firebase:create-auth-users": "node scripts/firebase/createAuthUsers.mjs",
+    "firebase:update-teachers": "node scripts/firebase/updateTeacherData.mjs",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium",
     "preview": "vite preview"

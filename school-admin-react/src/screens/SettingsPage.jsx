@@ -10,12 +10,80 @@ import { useToast } from '../hooks/useToast.js';
 import { esc } from '../utils/format.js';
 import { SCHOOL_NAME, ACADEMIC_YEAR, WHATSAPP_DELIVERY_MODE } from '../config/schoolConfig.js';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
+import { getFirebase, isFirebaseConfigured } from '../services/firebase/client.js';
+import { doc, setDoc, writeBatch, collection } from 'firebase/firestore';
+
+/** Realistic teacher records for Springdale School, Jaipur */
+const SEED_TEACHERS = [
+  { Teacher_ID: 'TCH_001',  Name: 'Rajesh Kumar Sharma', Subject: 'Science',        Phone: '9876501001', Email: 'rajesh.sharma@springdale.edu.in',   Qualification: 'M.Sc, B.Ed',                Join_Date: '15/06/2018', Class_Assigned: '1',  Section_Assigned: 'A', Status: 'Active', Password: '' },
+  { Teacher_ID: 'TCH_002',  Name: 'Priya Nair',           Subject: 'English',        Phone: '9876501002', Email: 'priya.nair@springdale.edu.in',       Qualification: 'M.A (English), B.Ed',       Join_Date: '01/07/2019', Class_Assigned: '2',  Section_Assigned: 'A', Status: 'Active', Password: '' },
+  { Teacher_ID: 'TCH_003',  Name: 'Amit Verma',           Subject: 'Mathematics',    Phone: '9876501003', Email: 'amit.verma@springdale.edu.in',       Qualification: 'M.Sc (Maths), B.Ed',        Join_Date: '10/08/2017', Class_Assigned: '3',  Section_Assigned: 'A', Status: 'Active', Password: '' },
+  { Teacher_ID: 'TCH_004',  Name: 'Sunita Yadav',         Subject: 'Social Studies', Phone: '9876501004', Email: 'sunita.yadav@springdale.edu.in',     Qualification: 'M.A (History), B.Ed',       Join_Date: '05/01/2020', Class_Assigned: '4',  Section_Assigned: 'A', Status: 'Active', Password: '' },
+  { Teacher_ID: 'TCH_005',  Name: 'Deepak Mehta',         Subject: 'English',        Phone: '9876501005', Email: 'deepak.mehta@springdale.edu.in',     Qualification: 'M.A (English), B.Ed',       Join_Date: '12/03/2021', Class_Assigned: '5',  Section_Assigned: 'A', Status: 'Active', Password: '' },
+  { Teacher_ID: 'TCH_006',  Name: 'Kavitha Rajan',        Subject: 'Mathematics',    Phone: '9876501006', Email: 'kavitha.rajan@springdale.edu.in',    Qualification: 'M.Sc (Maths), B.Ed',        Join_Date: '20/06/2016', Class_Assigned: '6',  Section_Assigned: 'A', Status: 'Active', Password: '' },
+  { Teacher_ID: 'TCH_007',  Name: 'Manish Gupta',         Subject: 'Science',        Phone: '9876501007', Email: 'manish.gupta@springdale.edu.in',     Qualification: 'M.Sc (Physics), B.Ed',      Join_Date: '01/04/2018', Class_Assigned: '7',  Section_Assigned: 'A', Status: 'Active', Password: '' },
+  { Teacher_ID: 'TCH_008',  Name: 'Anjali Singh',         Subject: 'Hindi',          Phone: '9876501008', Email: 'anjali.singh@springdale.edu.in',     Qualification: 'M.A (Hindi), B.Ed',         Join_Date: '09/09/2019', Class_Assigned: '8',  Section_Assigned: 'A', Status: 'Active', Password: '' },
+  { Teacher_ID: 'TCH_009',  Name: 'Suresh Patel',         Subject: 'Mathematics',    Phone: '9876501009', Email: 'suresh.patel@springdale.edu.in',     Qualification: 'M.Sc (Maths), B.Ed',        Join_Date: '15/02/2015', Class_Assigned: '9',  Section_Assigned: 'A', Status: 'Active', Password: '' },
+  { Teacher_ID: 'TCH_0010', Name: 'Rekha Agarwal',        Subject: 'Chemistry',      Phone: '9876501010', Email: 'rekha.agarwal@springdale.edu.in',    Qualification: 'M.Sc (Chemistry), B.Ed',    Join_Date: '22/07/2017', Class_Assigned: '10', Section_Assigned: 'A', Status: 'Active', Password: '' },
+  { Teacher_ID: 'TCH_0011', Name: 'Vijay Bhatia',         Subject: 'Physics',        Phone: '9876501011', Email: 'vijay.bhatia@springdale.edu.in',     Qualification: 'M.Sc (Physics), B.Ed, M.Ed',Join_Date: '03/01/2014', Class_Assigned: '11', Section_Assigned: 'A', Status: 'Active', Password: '' },
+  { Teacher_ID: 'TCH_0012', Name: 'Nandini Krishnan',     Subject: 'Biology',        Phone: '9876501012', Email: 'nandini.krishnan@springdale.edu.in', Qualification: 'M.Sc (Botany), B.Ed',       Join_Date: '18/08/2020', Class_Assigned: '12', Section_Assigned: 'A', Status: 'Active', Password: '' },
+];
+
+const PARENT_SEED = [
+  { father: 'Mr. Rajesh Sharma',   mother: 'Mrs. Sunita Sharma',  phone: '9871234501', address: 'Vaishali Nagar, Jaipur' },
+  { father: 'Mr. Anil Verma',      mother: 'Mrs. Geeta Verma',    phone: '9871234502', address: 'Malviya Nagar, Jaipur' },
+  { father: 'Mr. Suresh Patel',    mother: 'Mrs. Rekha Patel',    phone: '9871234503', address: 'Mansarovar, Jaipur' },
+  { father: 'Mr. Ramesh Singh',    mother: 'Mrs. Anita Singh',    phone: '9871234504', address: 'Tonk Road, Jaipur' },
+  { father: 'Mr. Vikas Kumar',     mother: 'Mrs. Savita Kumar',   phone: '9871234505', address: 'Chitrakoot, Jaipur' },
+  { father: 'Mr. Ashok Gupta',     mother: 'Mrs. Rani Gupta',     phone: '9871234506', address: 'Shyam Nagar, Jaipur' },
+  { father: 'Mr. Dinesh Yadav',    mother: 'Mrs. Shobha Yadav',   phone: '9871234507', address: 'Sanganer, Jaipur' },
+  { father: 'Mr. Narendra Joshi',  mother: 'Mrs. Kavita Joshi',   phone: '9871234508', address: 'Pratap Nagar, Jaipur' },
+  { father: 'Mr. Deepak Nair',     mother: 'Mrs. Usha Nair',      phone: '9871234509', address: 'Jagatpura, Jaipur' },
+  { father: 'Mr. Hemant Dixit',    mother: 'Mrs. Meena Dixit',    phone: '9871234510', address: 'Durgapura, Jaipur' },
+];
+const DOB_DAYS   = ['12','20','05','18','30','14','22','08','17','03'];
+const DOB_MONTHS = ['04','07','03','09','01','06','11','08','05','12'];
+
+const S_FIRST = ['Aarav','Vihaan','Aditya','Arjun','Diya','Ananya','Kavya'];
+const S_LAST  = ['Sharma','Verma','Singh','Patel','Kumar'];
+
+function buildSeedStudents() {
+  const rows = [];
+  for (let c = 1; c <= 12; c++) {
+    for (let s = 1; s <= 10; s++) {
+      const idx = (s - 1) % 10;
+      const p = PARENT_SEED[idx];
+      const dobYear = 2020 - c;
+      const admYear = Math.max(2015, 2020 - Math.max(0, c - 5));
+      rows.push({
+        Student_ID: `STU_${c}00${s}`,
+        Name: `${S_FIRST[(c + s) % S_FIRST.length]} ${S_LAST[(c * s) % S_LAST.length]}`,
+        Father_Name: p.father,
+        Mother_Name: p.mother,
+        Class: String(c),
+        Section: 'A',
+        Roll_No: s,
+        DOB: `${DOB_DAYS[idx]}/${DOB_MONTHS[idx]}/${dobYear}`,
+        Gender: s % 2 ? 'Male' : 'Female',
+        Phone: p.phone,
+        Parent_WhatsApp: p.phone,
+        Address: p.address,
+        Admission_Date: `01/04/${admYear}`,
+        Status: 'Active',
+        Academic_Year: ACADEMIC_YEAR,
+      });
+    }
+  }
+  return rows;
+}
+
 
 export default function SettingsPage() {
   const { t } = useTranslation();
   const api = useApi();
   const { showToast } = useToast();
   const [exporting, setExporting] = useState(false);
+  const [reseedBusy, setReseedBusy] = useState(false);
   const [holTitle, setHolTitle] = useState('');
   const [holStart, setHolStart] = useState('');
   const [holEnd, setHolEnd] = useState('');
@@ -228,6 +296,43 @@ export default function SettingsPage() {
       setWaBusy(false);
     }
   }, [api, showToast, refreshWaLog]);
+
+  const reseedDemoData = useCallback(async () => {
+    if (!isFirebaseConfigured()) {
+      showToast('Firebase is not configured — reseed only works in Firebase mode.', 'err');
+      return;
+    }
+    const fb = getFirebase();
+    if (!fb) { showToast('Firebase not ready.', 'err'); return; }
+    setReseedBusy(true);
+    try {
+      // Write teachers (12 docs)
+      let batch = writeBatch(fb.db);
+      let count = 0;
+      for (const t of SEED_TEACHERS) {
+        batch.set(doc(fb.db, 'teachers', t.Teacher_ID), t, { merge: true });
+        count++;
+        // Firestore batches max 500 writes
+        if (count % 490 === 0) { await batch.commit(); batch = writeBatch(fb.db); }
+      }
+
+      // Write students (120 docs)
+      const students = buildSeedStudents();
+      for (const s of students) {
+        batch.set(doc(fb.db, 'students', s.Student_ID), s, { merge: true });
+        count++;
+        if (count % 490 === 0) { await batch.commit(); batch = writeBatch(fb.db); }
+      }
+
+      await batch.commit();
+      showToast(`✅ Reseeded ${SEED_TEACHERS.length} teachers and ${students.length} students with realistic data!`, 'ok');
+    } catch (e) {
+      console.error('[Reseed error]', e);
+      showToast(`Reseed failed: ${e?.message || e}`, 'err');
+    } finally {
+      setReseedBusy(false);
+    }
+  }, [showToast]);
 
   const exportJson = useCallback(async () => {
     if (typeof api.exportSchoolSnapshot !== 'function') {
@@ -500,6 +605,33 @@ export default function SettingsPage() {
         )}
       </Card>
 
+      <Card style={{ marginTop: 16, border: '2px solid var(--accent, #6366f1)' }}>
+        <CardTitle>🔄 Reseed Demo Data to Firestore (admin only)</CardTitle>
+        <p style={{ marginBottom: 8 }}>
+          Updates all <strong>12 teacher records</strong> and <strong>120 student records</strong> in Firestore
+          with realistic Indian names, qualifications, email addresses, and Jaipur locality addresses.
+          This overwrites existing placeholder data like &quot;Teacher 1&quot;, &quot;Teacher 2&quot;, single phone numbers, and &quot;Bhopal&quot; addresses.
+        </p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 14 }}>
+          ✅ Teachers: Rajesh Kumar Sharma, Priya Nair, Amit Verma, Sunita Yadav… <br />
+          ✅ Students: Varied parent names, DOBs, WhatsApp numbers, and Jaipur locality addresses.<br />
+          ✅ After clicking, refresh the Teachers or Students page to see updated data.
+        </p>
+        <Button
+          type="button"
+          id="btn-reseed-demo-data"
+          onClick={reseedDemoData}
+          disabled={reseedBusy || !isFirebaseConfigured()}
+        >
+          {reseedBusy ? '⏳ Reseeding…' : '🔄 Reseed Teachers & Students in Firestore'}
+        </Button>
+        {!isFirebaseConfigured() && (
+          <p style={{ color: 'var(--text-muted)', marginTop: 8, fontSize: '0.83rem' }}>
+            (Firebase not configured — reseed is only available in Firebase mode.)
+          </p>
+        )}
+      </Card>
+
       <Card style={{ marginTop: 16 }}>
         <CardTitle>Data snapshot (admin)</CardTitle>
         <p style={{ marginBottom: 16 }}>
@@ -510,6 +642,7 @@ export default function SettingsPage() {
           {exporting ? 'Preparing…' : 'Download JSON snapshot'}
         </Button>
       </Card>
+
 
       <Card style={{ marginTop: 16 }}>
         <div className="sec-hdr">

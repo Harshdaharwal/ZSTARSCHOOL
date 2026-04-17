@@ -7,7 +7,7 @@ import { getFirebase, getSecondaryAuth, isFirebaseConfigured } from './firebase/
 const delay = (ms = 220) => new Promise((r) => setTimeout(r, ms));
 const uid = (p) => p + '_' + Date.now().toString().slice(-8);
 
-const LOCAL_DB_KEY = 'edumanage_local_db_v1';
+const LOCAL_DB_KEY = 'edumanage_local_db_v2';
 
 function canUseLocalStorage() {
   try {
@@ -126,31 +126,47 @@ export function seedMockDatabase() {
   if (DB.students.length) return;
   const fNames = ['Aarav', 'Vihaan', 'Aditya', 'Arjun', 'Diya', 'Ananya', 'Kavya'];
   const lNames = ['Sharma', 'Verma', 'Singh', 'Patel', 'Kumar'];
+  const PARENT_DATA = [
+    { father: 'Mr. Rajesh Sharma',  mother: 'Mrs. Sunita Sharma',  phone: '9871234501', address: 'Vaishali Nagar, Jaipur', dob: '12/04/2012' },
+    { father: 'Mr. Anil Verma',     mother: 'Mrs. Geeta Verma',    phone: '9871234502', address: 'Malviya Nagar, Jaipur', dob: '20/07/2011' },
+    { father: 'Mr. Suresh Patel',   mother: 'Mrs. Rekha Patel',    phone: '9871234503', address: 'Mansarovar, Jaipur',    dob: '05/03/2013' },
+    { father: 'Mr. Ramesh Singh',   mother: 'Mrs. Anita Singh',    phone: '9871234504', address: 'Tonk Road, Jaipur',     dob: '18/09/2012' },
+    { father: 'Mr. Vikas Kumar',    mother: 'Mrs. Savita Kumar',   phone: '9871234505', address: 'Chitrakoot, Jaipur',    dob: '30/01/2013' },
+    { father: 'Mr. Ashok Gupta',    mother: 'Mrs. Rani Gupta',     phone: '9871234506', address: 'Shyam Nagar, Jaipur',   dob: '14/06/2012' },
+    { father: 'Mr. Dinesh Yadav',   mother: 'Mrs. Shobha Yadav',   phone: '9871234507', address: 'Sanganer, Jaipur',      dob: '22/11/2011' },
+    { father: 'Mr. Narendra Joshi', mother: 'Mrs. Kavita Joshi',   phone: '9871234508', address: 'Pratap Nagar, Jaipur',  dob: '08/08/2012' },
+    { father: 'Mr. Deepak Nair',    mother: 'Mrs. Usha Nair',      phone: '9871234509', address: 'Jagatpura, Jaipur',     dob: '17/05/2013' },
+    { father: 'Mr. Hemant Dixit',   mother: 'Mrs. Meena Dixit',    phone: '9871234510', address: 'Durgapura, Jaipur',     dob: '03/12/2012' },
+  ];
   for (let c = 1; c <= 12; c++) {
     DB.classes.push({
       Class: String(c),
       Section: 'A',
-      Class_Teacher_ID: 'TCH_00' + c,
+      Class_Teacher_ID: c <= 9 ? `TCH_00${c}` : `TCH_00${c}`,
       Room_No: '10' + c,
       Total_Students: '10',
     });
     for (let s = 1; s <= 10; s++) {
       const stuId = `STU_${c}00${s}`;
       const name = `${fNames[(c + s) % fNames.length]} ${lNames[(c * s) % lNames.length]}`;
+      const p = PARENT_DATA[(s - 1) % PARENT_DATA.length];
+      // Adjust DOB year by class (Class 1 ~ 2019, Class 12 ~ 2008)
+      const dobYear = 2020 - c;
+      const adjustedDob = p.dob.replace(/\d{4}$/, String(dobYear));
       DB.students.push({
         Student_ID: stuId,
         Name: name,
-        Father_Name: 'Mr. Kumar',
-        Mother_Name: 'Mrs. Verma',
+        Father_Name: p.father,
+        Mother_Name: p.mother,
         Class: String(c),
         Section: 'A',
         Roll_No: s,
-        DOB: '15/05/2010',
+        DOB: adjustedDob,
         Gender: s % 2 ? 'Male' : 'Female',
-        Phone: '9876543210',
-        Parent_WhatsApp: '',
-        Address: 'Bhopal',
-        Admission_Date: '01/01/2020',
+        Phone: p.phone,
+        Parent_WhatsApp: p.phone,
+        Address: p.address,
+        Admission_Date: `01/04/${2020 + (c - 1) > 2026 ? 2021 : 2020 + Math.max(0, c - 5)}`,
         Status: 'Active',
         Academic_Year: ACADEMIC_YEAR,
       });
@@ -200,21 +216,24 @@ export function seedMockDatabase() {
       });
     }
   }
-  for (let t = 1; t <= 12; t++) {
-    DB.teachers.push({
-      Teacher_ID: `TCH_00${t}`,
-      Name: `Teacher ${t}`,
-      Subject: ['Math', 'Science', 'English'][t % 3],
-      Phone: '9988776655',
-      Email: 't@school.com',
-      Qualification: 'B.Ed',
-      Join_Date: '01/01/2020',
-      Class_Assigned: String(t),
-      Section_Assigned: 'A',
-      Status: 'Active',
-      Password: '',
-    });
-  }
+  // --------------- TEACHERS ---------------
+  const TEACHERS = [
+    { Teacher_ID: 'TCH_001', Name: 'Rajesh Kumar Sharma', Subject: 'Science',       Phone: '9876501001', Email: 'rajesh.sharma@springdale.edu.in',   Qualification: 'M.Sc, B.Ed',               Join_Date: '15/06/2018', Class_Assigned: '1',  Section_Assigned: 'A' },
+    { Teacher_ID: 'TCH_002', Name: 'Priya Nair',          Subject: 'English',       Phone: '9876501002', Email: 'priya.nair@springdale.edu.in',       Qualification: 'M.A (English), B.Ed',      Join_Date: '01/07/2019', Class_Assigned: '2',  Section_Assigned: 'A' },
+    { Teacher_ID: 'TCH_003', Name: 'Amit Verma',          Subject: 'Mathematics',   Phone: '9876501003', Email: 'amit.verma@springdale.edu.in',       Qualification: 'M.Sc (Maths), B.Ed',       Join_Date: '10/08/2017', Class_Assigned: '3',  Section_Assigned: 'A' },
+    { Teacher_ID: 'TCH_004', Name: 'Sunita Yadav',        Subject: 'Social Studies',Phone: '9876501004', Email: 'sunita.yadav@springdale.edu.in',     Qualification: 'M.A (History), B.Ed',      Join_Date: '05/01/2020', Class_Assigned: '4',  Section_Assigned: 'A' },
+    { Teacher_ID: 'TCH_005', Name: 'Deepak Mehta',        Subject: 'English',       Phone: '9876501005', Email: 'deepak.mehta@springdale.edu.in',     Qualification: 'M.A (English), B.Ed',      Join_Date: '12/03/2021', Class_Assigned: '5',  Section_Assigned: 'A' },
+    { Teacher_ID: 'TCH_006', Name: 'Kavitha Rajan',       Subject: 'Mathematics',   Phone: '9876501006', Email: 'kavitha.rajan@springdale.edu.in',    Qualification: 'M.Sc (Maths), B.Ed',       Join_Date: '20/06/2016', Class_Assigned: '6',  Section_Assigned: 'A' },
+    { Teacher_ID: 'TCH_007', Name: 'Manish Gupta',        Subject: 'Science',       Phone: '9876501007', Email: 'manish.gupta@springdale.edu.in',     Qualification: 'M.Sc (Physics), B.Ed',     Join_Date: '01/04/2018', Class_Assigned: '7',  Section_Assigned: 'A' },
+    { Teacher_ID: 'TCH_008', Name: 'Anjali Singh',        Subject: 'Hindi',         Phone: '9876501008', Email: 'anjali.singh@springdale.edu.in',     Qualification: 'M.A (Hindi), B.Ed',        Join_Date: '09/09/2019', Class_Assigned: '8',  Section_Assigned: 'A' },
+    { Teacher_ID: 'TCH_009', Name: 'Suresh Patel',        Subject: 'Mathematics',   Phone: '9876501009', Email: 'suresh.patel@springdale.edu.in',     Qualification: 'M.Sc (Maths), B.Ed',       Join_Date: '15/02/2015', Class_Assigned: '9',  Section_Assigned: 'A' },
+    { Teacher_ID: 'TCH_0010',Name: 'Rekha Agarwal',       Subject: 'Chemistry',     Phone: '9876501010', Email: 'rekha.agarwal@springdale.edu.in',    Qualification: 'M.Sc (Chemistry), B.Ed',   Join_Date: '22/07/2017', Class_Assigned: '10', Section_Assigned: 'A' },
+    { Teacher_ID: 'TCH_0011',Name: 'Vijay Bhatia',        Subject: 'Physics',       Phone: '9876501011', Email: 'vijay.bhatia@springdale.edu.in',     Qualification: 'M.Sc (Physics), B.Ed, M.Ed',Join_Date: '03/01/2014', Class_Assigned: '11', Section_Assigned: 'A' },
+    { Teacher_ID: 'TCH_0012',Name: 'Nandini Krishnan',    Subject: 'Biology',       Phone: '9876501012', Email: 'nandini.krishnan@springdale.edu.in', Qualification: 'M.Sc (Botany), B.Ed',      Join_Date: '18/08/2020', Class_Assigned: '12', Section_Assigned: 'A' },
+  ];
+  TEACHERS.forEach((t) => {
+    DB.teachers.push({ ...t, Status: 'Active', Password: '' });
+  });
   DB.exams.push(
     { Exam_ID: 'EXM_101', Exam_Name: 'Mid Term', Class: '10', Subject: 'Math', Exam_Date: '15/10/2023', Max_Marks: 100, Pass_Marks: 33 },
     { Exam_ID: 'EXM_102', Exam_Name: 'Mid Term', Class: '10', Subject: 'Science', Exam_Date: '16/10/2023', Max_Marks: 100, Pass_Marks: 33 }
