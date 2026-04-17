@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { IconStudents, IconCamera, IconPlus, IconEdit, IconRefresh, IconSave, IconSearch } from '../components/common/Icons.jsx';
 import { Card, CardTitle } from '../components/common/Card.jsx';
 import { Button } from '../components/common/Button.jsx';
 import { Badge } from '../components/common/Badge.jsx';
@@ -15,7 +16,7 @@ import { esc } from '../utils/format.js';
 import { ACADEMIC_YEAR, ACADEMIC_YEAR_OPTIONS } from '../config/schoolConfig.js';
 
 const PAGE_SIZE = 20;
-const MAX_PHOTO_BYTES = 4 * 1024 * 1024; // 4 MB
+const MAX_PHOTO_BYTES = 200 * 1024; // 200 KB
 
 /* ── Photo Picker ───────────────────────────────────────────────────── */
 function PhotoPicker({ value, onChange }) {
@@ -26,7 +27,8 @@ function PhotoPicker({ value, onChange }) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > MAX_PHOTO_BYTES) {
-      showToast('Photo must be 4 MB or smaller.', 'err');
+      const selectedKb = Math.ceil(file.size / 1024);
+      showToast(`Photo is ${selectedKb}KB. Maximum allowed is 200KB.`, 'err');
       e.target.value = '';
       return;
     }
@@ -58,13 +60,13 @@ function PhotoPicker({ value, onChange }) {
         {value ? (
           <img src={value} alt="Photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <span style={{ fontSize: 32, opacity: 0.4 }}>📷</span>
+          <IconCamera size={28} style={{ opacity: 0.35 }} strokeWidth={1.5} />
         )}
       </div>
       <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center' }}>
         {value ? 'Click to change' : 'Click to add photo'}
         <br />
-        Max 4 MB
+        Max 200 KB
       </span>
       <input
         ref={inputRef}
@@ -94,15 +96,15 @@ function PhotoThumb({ src, name }) {
         width: 36,
         height: 36,
         borderRadius: '50%',
-        background: 'var(--sidebar-bg,#e8eaf6)',
+        background: 'var(--bg,#f1f5f9)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: 18,
         border: '2px solid var(--border,#e0e0e0)',
+        color: 'var(--text-muted)',
       }}
     >
-      🎒
+      <IconStudents size={18} strokeWidth={1.5} />
     </div>
   );
 }
@@ -214,7 +216,7 @@ export default function StudentsPage() {
   return (
     <>
       <Card>
-        <CardTitle>➕ New Student Registration</CardTitle>
+        <CardTitle><IconPlus size={16} strokeWidth={2.5} style={{ verticalAlign: 'middle', marginRight: 6 }} />New Student Registration</CardTitle>
         <form className="form-grid" onSubmit={addStudent}>
           {/* Photo picker spans full width, centered */}
           <div className="form-group full" style={{ display: 'flex', justifyContent: 'center' }}>
@@ -286,15 +288,15 @@ export default function StudentsPage() {
             <textarea name="address" rows={2} />
           </div>
           <div className="form-group full btn-row">
-            <Button type="submit">🎒 Register Student</Button>
+            <Button type="submit"><IconStudents size={15} strokeWidth={2} style={{ marginRight: 4 }} />Register Student</Button>
           </div>
         </form>
       </Card>
 
       <Card>
-        <SectionHeader title="📋 All Students" actions={<Button onClick={() => refresh()}>🔄 Refresh</Button>} />
+        <SectionHeader title="All Students" actions={<Button onClick={() => refresh()} size="sm" variant="ghost"><IconRefresh size={14} /> Refresh</Button>} />
         <div className="filter-bar">
-          <input placeholder="🔍 Search" style={{ flex: 1, minWidth: 200 }} value={q} onChange={(e) => setQ(e.target.value)} />
+          <input placeholder="Search…" style={{ flex: 1, minWidth: 200 }} value={q} onChange={(e) => setQ(e.target.value)} />
           <label className="filter-label-inline">
             <span>Class</span>
             <select value={fc} onChange={(e) => setFc(e.target.value)}>
@@ -385,7 +387,7 @@ export default function StudentsPage() {
         </p>
       </Card>
 
-      <Modal open={modalOpen} title="✏️ Edit Student" onClose={() => setModalOpen(false)}>
+      <Modal open={modalOpen} title="Edit Student" onClose={() => setModalOpen(false)}>
         {edit && (
           <form onSubmit={onSave} className="form-grid">
             <input type="hidden" name="_id" value={edit.Student_ID} />
@@ -442,7 +444,7 @@ export default function StudentsPage() {
               <textarea name="address" defaultValue={edit.Address} rows={2} />
             </div>
             <div className="btn-row">
-              <Button type="submit">💾 Save</Button>
+              <Button type="submit"><IconSave size={15} /> Save</Button>
             </div>
           </form>
         )}

@@ -5,14 +5,15 @@ import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 import { FilterTabs } from '../components/common/FilterTabs.jsx';
 import { SectionHeader } from '../components/common/SectionHeader.jsx';
 import { Spinner } from '../components/common/Spinner.jsx';
+import { IconExams, IconMarks, IconRefresh } from '../components/common/Icons.jsx';
 import { useApi } from '../hooks/useApi.js';
 import { useAsyncResource } from '../hooks/useAsyncResource.js';
 import { useToast } from '../hooks/useToast.js';
 import { formatDateIN, esc } from '../utils/format.js';
 
 const TABS = [
-  { id: 'ex', label: '📝 Exam Details' },
-  { id: 'mk', label: '✏️ Marks' },
+  { id: 'ex', label: 'Exam Details', Icon: IconExams },
+  { id: 'mk', label: 'Marks', Icon: IconMarks },
 ];
 
 export default function ExamsPage() {
@@ -158,7 +159,7 @@ export default function ExamsPage() {
             </form>
           </Card>
           <Card>
-            <SectionHeader title="Exams" actions={<Button onClick={() => re()}>🔄</Button>} />
+            <SectionHeader title="Exams" actions={<Button onClick={() => re()} size="sm" variant="ghost"><IconRefresh size={14} /></Button>} />
             <div className="tbl-wrap">
               <table>
                 <thead>
@@ -227,7 +228,7 @@ export default function ExamsPage() {
             </form>
           </Card>
           <Card>
-            <SectionHeader title="All Marks" actions={<Button onClick={() => rm()}>🔄</Button>} />
+            <SectionHeader title="All Marks" actions={<Button onClick={() => rm()} size="sm" variant="ghost"><IconRefresh size={14} /></Button>} />
             <div className="tbl-wrap">
               <table>
                 <thead>

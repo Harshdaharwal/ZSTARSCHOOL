@@ -3,6 +3,7 @@ import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router
 import { AuthProvider } from './context/AuthProvider.jsx';
 import { ApiProvider } from './context/ApiProvider.jsx';
 import { ToastProvider } from './context/ToastProvider.jsx';
+import { ColorModeProvider } from './context/ColorModeProvider.jsx';
 import { ToastHost } from './components/common/ToastHost.jsx';
 import { StaffProtectedRoute } from './components/StaffProtectedRoute.jsx';
 import { RequireAdmin } from './components/RequireAdmin.jsx';
@@ -40,12 +41,13 @@ function SuspenseFallback() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ApiProvider>
-        <ToastProvider>
-          <Router>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
+    <ColorModeProvider>
+      <AuthProvider>
+        <ApiProvider>
+          <ToastProvider>
+            <Router>
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
 
               <Route element={<StaffProtectedRoute />}>
                 <Route element={<AppLayout />}>
@@ -173,9 +175,7 @@ export default function App() {
                     path="/timetables"
                     element={
                       <Suspense fallback={<SuspenseFallback />}>
-                        <RequireAdmin>
-                          <TimetablesPage />
-                        </RequireAdmin>
+                        <TimetablesPage />
                       </Suspense>
                     }
                   />
@@ -183,9 +183,7 @@ export default function App() {
                     path="/announcements"
                     element={
                       <Suspense fallback={<SuspenseFallback />}>
-                        <RequireAdmin>
-                          <AnnouncementsPage />
-                        </RequireAdmin>
+                        <AnnouncementsPage />
                       </Suspense>
                     }
                   />
@@ -202,11 +200,12 @@ export default function App() {
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
               </Route>
-            </Routes>
-          </Router>
-          <ToastHost />
-        </ToastProvider>
-      </ApiProvider>
-    </AuthProvider>
+              </Routes>
+            </Router>
+            <ToastHost />
+          </ToastProvider>
+        </ApiProvider>
+      </AuthProvider>
+    </ColorModeProvider>
   );
 }

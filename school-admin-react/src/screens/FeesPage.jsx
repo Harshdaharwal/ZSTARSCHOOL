@@ -4,6 +4,7 @@ import { Button } from '../components/common/Button.jsx';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 import { SectionHeader } from '../components/common/SectionHeader.jsx';
 import { Spinner } from '../components/common/Spinner.jsx';
+import { IconRefresh, IconMoney } from '../components/common/Icons.jsx';
 import { useApi } from '../hooks/useApi.js';
 import { useAsyncResource } from '../hooks/useAsyncResource.js';
 import { useToast } from '../hooks/useToast.js';
@@ -71,7 +72,7 @@ export default function FeesPage() {
         onCancel={() => setConfirm(null)}
       />
       <Card>
-        <CardTitle>💰 Add Fee</CardTitle>
+        <CardTitle><IconMoney size={16} strokeWidth={2} style={{ marginRight: 6, verticalAlign: 'middle' }} />Add Fee</CardTitle>
         <form className="form-grid" onSubmit={submit}>
           <div className="form-group">
             <label>Student ID *</label>
@@ -115,7 +116,7 @@ export default function FeesPage() {
       </Card>
 
       <Card>
-        <SectionHeader title="📋 Fee Records" actions={<Button onClick={() => refresh()}>🔄</Button>} />
+        <SectionHeader title="Fee Records" actions={<Button onClick={() => refresh()} size="sm" variant="ghost"><IconRefresh size={14} /></Button>} />
         <div className="btn-row" style={{ marginBottom: 16 }}>
           <Button variant="ghost" size="sm" onClick={() => setMode('all')}>
             All

@@ -1,16 +1,104 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Profile doc: /users/{uid} with fields role, teacherId?, studentIds?
-    // Only the signed-in user can read their own profile; school admin updates via Admin SDK or Console.
-    match /users/{uid} {
-      allow read: if request.auth != null && request.auth.uid == uid;
-      allow write: if false;
+    function signedIn() {
+      return request.auth != null;
     }
 
-    // Lock everything else until you model collections — then add explicit matches above this line.
+    // Supports both:
+    // - Firestore-backed roles: `/users/{uid}.role == 'admin'`
+    // - Optional custom claims: `request.auth.token.admin == true` or `request.auth.token.role == 'admin'`
+    function isAdmin() {
+      return signedIn() && (
+        request.auth.token.admin == true ||
+        request.auth.token.role == 'admin' ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        )
+      );
+    }
+
+    function isTeacher() {
+      return signedIn() && (
+        request.auth.token.role == 'teacher' ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher'
+        )
+      );
+    }
+
+    function teacherId() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teacherId)
+        : '';
+    }
+
+    // Directory/profile doc: /users/{uid}
+    // App behavior expects authenticated users to be able to look up roles by email (queries),
+    // and to self-provision `/users/{uid}` on first login.
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow update, delete: if signedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    // Teachers are used for directory lookups and admin-managed CRUD.
+    match /teachers/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // Staff announcements (teacher + admin).
+    match /announcements/{announcementId} {
+      allow read: if signedIn();
+      allow create: if isAdmin() || (
+        isTeacher() && (
+          request.resource.data.Author_UID == request.auth.uid ||
+          request.resource.data.Author_ID == teacherId()
+        )
+      );
+      allow update: if isAdmin() || (
+        isTeacher() && (
+          resource.data.Author_UID == request.auth.uid ||
+          resource.data.Author_ID == teacherId()
+        )
+      );
+      allow delete: if isAdmin() || (
+        isTeacher() && (
+          resource.data.Author_UID == request.auth.uid ||
+          resource.data.Author_ID == teacherId()
+        )
+      );
+    }
+
+    // Class notices (teacher + admin).
+    match /class_announcements/{noticeId} {
+      allow read: if signedIn();
+      allow create: if isAdmin() || (
+        isTeacher() && (
+          request.resource.data.Teacher_UID == request.auth.uid ||
+          request.resource.data.Teacher_ID == teacherId()
+        )
+      );
+      allow update: if isAdmin() || (
+        isTeacher() && (
+          resource.data.Teacher_UID == request.auth.uid ||
+          resource.data.Teacher_ID == teacherId()
+        )
+      );
+      allow delete: if isAdmin() || (
+        isTeacher() && (
+          resource.data.Teacher_UID == request.auth.uid ||
+          resource.data.Teacher_ID == teacherId()
+        )
+      );
+    }
+
+    // Everything else: admins only.
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if isAdmin();
     }
   }
 }

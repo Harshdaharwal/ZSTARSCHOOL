@@ -1,10 +1,11 @@
 import { memo } from 'react';
+import { IconEmpty } from './Icons.jsx';
 
-export const EmptyState = memo(function EmptyState({ title, hint, icon = '📭' }) {
+export const EmptyState = memo(function EmptyState({ title, hint, icon }) {
   return (
     <div className="empty" role="status">
-      <div style={{ fontSize: '2rem', marginBottom: 8 }} aria-hidden>
-        {icon}
+      <div style={{ marginBottom: 12, color: 'var(--text-muted)', display: 'flex', justifyContent: 'center' }} aria-hidden>
+        {icon ?? <IconEmpty size={40} strokeWidth={1.5} />}
       </div>
       <div style={{ fontSize: '1.05rem', marginBottom: 6 }}>{title}</div>
       {hint && (

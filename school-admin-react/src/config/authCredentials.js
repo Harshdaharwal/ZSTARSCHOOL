@@ -1,6 +1,6 @@
 /** Demo credentials — replace with Firebase / backend auth later. */
 export const DEMO_ADMIN = {
-  email: 'admin@school.com',
+  email: 'admin.springdale@school.com',
   password: 'Admin@123',
   role: 'admin',
 };

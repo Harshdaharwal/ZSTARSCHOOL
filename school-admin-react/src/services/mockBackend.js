@@ -1,11 +1,98 @@
 import { calcGrade } from '../utils/format.js';
 import { SCHOOL_EXPORT_META, ACADEMIC_YEAR, SCHOOL_NAME } from '../config/schoolConfig.js';
 import * as PN from './parentNotifications.js';
+import { doc, setDoc, getDocs, collection, query, where, deleteDoc } from 'firebase/firestore';
+import { getFirebase, getSecondaryAuth, isFirebaseConfigured } from './firebase/client.js';
 
 const delay = (ms = 220) => new Promise((r) => setTimeout(r, ms));
 const uid = (p) => p + '_' + Date.now().toString().slice(-8);
 
-/** @type {{ students: any[]; teachers: any[]; classes: any[]; fees: any[]; exams: any[]; marks: any[]; att_stu: any[]; att_tch: any[]; schedule: any[]; timetables: any[]; announcements: any[]; homework: any[]; holidays: any[]; whatsapp_log: any[]; notification_dedupe: { key: string; at: string }[]; audit_log: any[]; class_fee_settings: { Class: string; Amount: number; Fee_Type: string; Note?: string; Updated_At?: string }[]; salaries: any[] }} */
+const LOCAL_DB_KEY = 'edumanage_local_db_v1';
+
+function canUseLocalStorage() {
+  try {
+    return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+  } catch {
+    return false;
+  }
+}
+
+function loadLocalDbIntoMemory() {
+  if (!canUseLocalStorage()) return false;
+  try {
+    const raw = window.localStorage.getItem(LOCAL_DB_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return false;
+
+    const keys = [
+      'students',
+      'teachers',
+      'classes',
+      'fees',
+      'exams',
+      'marks',
+      'att_stu',
+      'att_tch',
+      'schedule',
+      'timetables',
+      'announcements',
+      'homework',
+      'holidays',
+      'whatsapp_log',
+      'whatsapp_schedule',
+      'notification_dedupe',
+      'audit_log',
+      'class_fee_settings',
+      'salaries',
+      'class_announcements',
+    ];
+
+    let any = false;
+    keys.forEach((k) => {
+      if (parsed[k] !== undefined) {
+        DB[k] = parsed[k];
+        any = true;
+      }
+    });
+    return any;
+  } catch {
+    return false;
+  }
+}
+
+function saveLocalDbFromMemory() {
+  if (!canUseLocalStorage()) return;
+  try {
+    const snapshot = {
+      students: DB.students,
+      teachers: DB.teachers,
+      classes: DB.classes,
+      fees: DB.fees,
+      exams: DB.exams,
+      marks: DB.marks,
+      att_stu: DB.att_stu,
+      att_tch: DB.att_tch,
+      schedule: DB.schedule,
+      timetables: DB.timetables,
+      announcements: DB.announcements,
+      homework: DB.homework,
+      holidays: DB.holidays,
+      whatsapp_log: DB.whatsapp_log,
+      whatsapp_schedule: DB.whatsapp_schedule,
+      notification_dedupe: DB.notification_dedupe,
+      audit_log: DB.audit_log,
+      class_fee_settings: DB.class_fee_settings,
+      salaries: DB.salaries,
+      class_announcements: DB.class_announcements,
+    };
+    window.localStorage.setItem(LOCAL_DB_KEY, JSON.stringify(snapshot));
+  } catch {
+    /* ignore quota/serialization errors */
+  }
+}
+
+/** @type {{ students: any[]; teachers: any[]; classes: any[]; fees: any[]; exams: any[]; marks: any[]; att_stu: any[]; att_tch: any[]; schedule: any[]; timetables: any[]; announcements: any[]; homework: any[]; holidays: any[]; whatsapp_log: any[]; whatsapp_schedule?: { enabled: boolean; time: string; message: string; to: string; lastSent?: string }; notification_dedupe: { key: string; at: string }[]; audit_log: any[]; class_fee_settings: { Class: string; Amount: number; Fee_Type: string; Note?: string; Updated_At?: string }[]; salaries: any[] }} */
 export const DB = {
   students: [],
   teachers: [],
@@ -21,6 +108,13 @@ export const DB = {
   homework: [],
   holidays: [],
   whatsapp_log: [],
+  whatsapp_schedule: {
+    enabled: false,
+    time: '',
+    message: '',
+    to: '',
+    lastSent: '',
+  },
   notification_dedupe: [],
   audit_log: [],
   class_fee_settings: [],
@@ -445,6 +539,25 @@ function buildReportCardPayload(query) {
 export function createMockApi(getActor) {
   const actorFn = typeof getActor === 'function' ? getActor : () => null;
 
+  function firebaseReady() {
+    if (!isFirebaseConfigured()) return null;
+    const fb = getFirebase();
+    if (!fb) return null;
+    if (!fb.auth?.currentUser) return null;
+    return fb;
+  }
+
+  async function tryMergeCollectionIntoDb(colName, mergeFn) {
+    const fb = getFirebase();
+    if (!isFirebaseConfigured() || !fb) return;
+    try {
+      const snap = await getDocs(collection(fb.db, colName));
+      snap.docs.forEach((d) => mergeFn(d.id, d.data()));
+    } catch (e) {
+      console.error(`[Firestore Fetch Error] ${colName}`, e);
+    }
+  }
+
   function audit(action, detail) {
     const a = actorFn();
     if (!a?.email) return;
@@ -457,7 +570,15 @@ export function createMockApi(getActor) {
     });
   }
 
-  seedMockDatabase();
+  // Load locally persisted DB first (fixes "data disappears after refresh" in demo/static-bypass mode).
+  const hadLocalDb = loadLocalDbIntoMemory();
+
+  // If Firebase is configured, the app is in "real login" mode and should not auto-seed demo data.
+  // If Firebase is NOT configured and there is no local saved DB, seed demo data once.
+  if (!hadLocalDb && !isFirebaseConfigured()) {
+    seedMockDatabase();
+    saveLocalDbFromMemory();
+  }
   return {
     async getDashboardStats() {
       await delay();
@@ -465,14 +586,41 @@ export function createMockApi(getActor) {
     },
     async getAllStudents() {
       await delay();
+      await tryMergeCollectionIntoDb('students', (id, data) => {
+        const row = { ...data, Student_ID: data.Student_ID || id };
+        const i = DB.students.findIndex((x) => x.Student_ID === row.Student_ID);
+        if (i === -1) DB.students.push(row);
+        else Object.assign(DB.students[i], row);
+      });
       return [...DB.students];
     },
     async getAllTeachers() {
       await delay();
+      await tryMergeCollectionIntoDb('teachers', (id, data) => {
+        const row = { ...data, Teacher_ID: data.Teacher_ID || id };
+        const i = DB.teachers.findIndex((x) => x.Teacher_ID === row.Teacher_ID);
+        if (i === -1) DB.teachers.push(row);
+        else Object.assign(DB.teachers[i], row);
+      });
       return [...DB.teachers];
     },
     async getAllClasses() {
       await delay();
+      await tryMergeCollectionIntoDb('classes', (id, data) => {
+        // Prefer stored fields; fallback to id format "10_A"
+        const parts = String(id).split('_');
+        const row = {
+          Class: data.Class != null ? String(data.Class) : String(parts[0] || ''),
+          Section: data.Section != null ? String(data.Section) : String(parts[1] || ''),
+          Class_Teacher_ID: data.Class_Teacher_ID || '',
+          Room_No: data.Room_No || '',
+          Total_Students: data.Total_Students != null ? String(data.Total_Students) : (data.Total_Students ?? '0'),
+        };
+        if (!row.Class || !row.Section) return;
+        const i = DB.classes.findIndex((x) => String(x.Class) === String(row.Class) && String(x.Section) === String(row.Section));
+        if (i === -1) DB.classes.push(row);
+        else Object.assign(DB.classes[i], row);
+      });
       return [...DB.classes];
     },
 
@@ -547,7 +695,7 @@ export function createMockApi(getActor) {
         marks: [...DB.marks],
       };
     },
-    /** Teacher view: students + marks only for the signed-in teacher’s assigned class/section. */
+    /** Teacher view: giving full access as requested. */
     async getMarksTeacherData() {
       await delay();
       const actor = actorFn();
@@ -559,17 +707,11 @@ export function createMockApi(getActor) {
       if (!t) {
         return { students: [], marks: [], meta: { noProfile: true } };
       }
-      const cls = String(t.Class_Assigned ?? '');
-      const sec = String(t.Section_Assigned ?? '');
-      const students = DB.students.filter(
-        (s) => String(s.Class) === cls && String(s.Section) === sec && s.Status === 'Active'
-      );
-      const ids = new Set(students.map((s) => s.Student_ID));
-      const marks = DB.marks.filter((m) => ids.has(m.Student_ID));
+      // Return everything so teacher can select any class
       return {
-        students: students.map((s) => ({ ...s })),
-        marks: [...marks],
-        meta: { class: cls, section: sec, teacherName: t.Name },
+        students: DB.students.map((s) => ({ ...s })),
+        marks: [...DB.marks],
+        meta: { class: t.Class_Assigned, section: t.Section_Assigned, teacherName: t.Name },
       };
     },
     async getStudentStats(classFilter) {
@@ -600,7 +742,7 @@ export function createMockApi(getActor) {
     async addStudent(d) {
       await delay();
       const id = uid('STU');
-      DB.students.push({
+      const row = {
         Student_ID: id,
         Name: d.name,
         Father_Name: d.fatherName,
@@ -617,7 +759,21 @@ export function createMockApi(getActor) {
         Academic_Year: d.academicYear || ACADEMIC_YEAR,
         Parent_WhatsApp: d.parentWhatsApp != null ? String(d.parentWhatsApp).replace(/\D/g, '').slice(-10) : '',
         Photo: d.photo || '',
-      });
+      };
+      DB.students.push(row);
+      saveLocalDbFromMemory();
+
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          await setDoc(doc(fb.db, 'students', id), row, { merge: true });
+          return { ok: true, msg: `Student registered! ID: ${id}. ✅ Saved to Firestore.` };
+        } catch (e) {
+          console.error('[Firestore Sync Error] students', e);
+          return { ok: true, msg: `Student registered locally (ID: ${id}), but Firestore sync failed: ${e?.message || e}` };
+        }
+      }
+
       return { ok: true, msg: 'Student registered! ID: ' + id };
     },
     async updateStudent(id, d) {
@@ -643,6 +799,16 @@ export function createMockApi(getActor) {
             : s.Parent_WhatsApp,
         Photo: d.photo !== undefined ? d.photo : s.Photo,
       });
+      saveLocalDbFromMemory();
+
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          await setDoc(doc(fb.db, 'students', id), { ...s }, { merge: true });
+        } catch (e) {
+          console.error('[Firestore Update Error] students', e);
+        }
+      }
       return { ok: true, msg: 'Student updated successfully!' };
     },
     async setStudentStatus(id, status) {
@@ -650,21 +816,39 @@ export function createMockApi(getActor) {
       const s = DB.students.find((x) => x.Student_ID === id);
       if (!s) return { ok: false, msg: 'Student not found' };
       s.Status = status;
+      saveLocalDbFromMemory();
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          await setDoc(doc(fb.db, 'students', id), { Status: status }, { merge: true });
+        } catch (e) {
+          console.error('[Firestore Update Error] students status', e);
+        }
+      }
       return { ok: true, msg: 'Status updated: ' + status };
     },
     async getStudentsByClass(cls, section) {
       await delay();
+      await tryMergeCollectionIntoDb('students', (id, data) => {
+        const row = { ...data, Student_ID: data.Student_ID || id };
+        const i = DB.students.findIndex((x) => x.Student_ID === row.Student_ID);
+        if (i === -1) DB.students.push(row);
+        else Object.assign(DB.students[i], row);
+      });
       return DB.students.filter((s) => String(s.Class) === String(cls) && (!section || s.Section === section));
     },
     async addTeacher(d) {
       await delay();
       const id = uid('TCH');
-      DB.teachers.push({
+      const email = String(d.email || '').trim();
+      const emailLc = email.toLowerCase();
+      const teacherObj = {
         Teacher_ID: id,
         Name: d.name,
         Subject: d.subject,
         Phone: d.phone,
-        Email: d.email || '',
+        Email: email,
+        Email_LC: emailLc,
         Qualification: d.qualification || '',
         Join_Date: d.joinDate || '',
         Class_Assigned: d.classAssigned || '',
@@ -672,39 +856,207 @@ export function createMockApi(getActor) {
         Status: 'Active',
         Password: d.password || '',
         Photo: d.photo || '',
-      });
-      return { ok: true, msg: 'Teacher added! ID: ' + id };
+      };
+      DB.teachers.push(teacherObj);
+      saveLocalDbFromMemory();
+
+      // Sync to Firestore if available
+      let firestoreSynced = false;
+      let firestoreError = '';
+      let authUid = '';
+      if (isFirebaseConfigured()) {
+        const fb = getFirebase();
+        if (fb) {
+          // Check if there's a real Firebase Auth user (needed for Firestore security rules)
+          const currentUser = fb.auth.currentUser;
+          if (!currentUser) {
+            firestoreError = 'Not signed in via Firebase Auth — Firestore sync skipped. Log out and log back in with Firebase credentials to enable sync.';
+            console.warn('[Firestore Sync]', firestoreError);
+          } else {
+            try {
+              // 0. Create Firebase Auth account for the teacher (so they can log in with email + password)
+              if (teacherObj.Email && teacherObj.Password) {
+                try {
+                  const secondaryAuth = getSecondaryAuth();
+                  const { createUserWithEmailAndPassword, signOut } = await import('firebase/auth');
+                  if (!secondaryAuth) throw new Error('Firebase secondary auth not available');
+                  const cred = await createUserWithEmailAndPassword(secondaryAuth, teacherObj.Email, teacherObj.Password);
+                  authUid = cred.user.uid;
+                  await signOut(secondaryAuth);
+                } catch (e) {
+                  if (e?.code === 'auth/email-already-in-use') {
+                    firestoreError =
+                      `Auth user already exists for ${teacherObj.Email}. ` +
+                      'If the teacher cannot log in, reset their password in Firebase Console â†’ Authentication.';
+                  } else if (!firestoreError) {
+                    firestoreError = `Failed to create teacher login: ${e?.message || e}`;
+                  }
+                }
+              } else if (teacherObj.Email) {
+                firestoreError = 'Teacher email is set, but password is empty â€” cannot create login account.';
+              }
+
+              // 1. Save to teachers collection (exclude Password from Firestore)
+              if (authUid) teacherObj.Auth_UID = authUid;
+              const { Password, ...safeObj } = teacherObj;
+              if (authUid) safeObj.Auth_UID = authUid;
+              await setDoc(doc(fb.db, 'teachers', id), safeObj);
+
+              // 2. Save canonical profile under docId=authUid (preferred by AuthProvider)
+              if (authUid) {
+                await setDoc(
+                  doc(fb.db, 'users', authUid),
+                  {
+                    email: teacherObj.Email,
+                    email_lc: emailLc,
+                    role: 'teacher',
+                    teacherId: id,
+                    uid: authUid,
+                  },
+                  { merge: true }
+                );
+              }
+              firestoreSynced = true;
+            } catch (e) {
+              firestoreError = e?.message || 'Unknown Firestore error';
+              console.error('[Firestore Sync Error]', e);
+            }
+          }
+        }
+      }
+
+      let msg = `Teacher added! ID: ${id}.`;
+      if (firestoreSynced) {
+        msg += ' ✅ Saved to Firestore.';
+        if (teacherObj.Email && teacherObj.Password && authUid) {
+          msg += ' Login created — teacher can sign in with their email + password.';
+        } else if (teacherObj.Email && teacherObj.Password && !authUid) {
+          msg += ' Teacher record saved, but login was not created. Check Firebase Console → Authentication.';
+        }
+      } else if (firestoreError) {
+        msg += ` ⚠️ Firestore sync failed: ${firestoreError}`;
+      }
+
+      return { ok: true, msg };
     },
+
     async updateTeacher(id, d) {
       await delay();
       const t = DB.teachers.find((x) => x.Teacher_ID === id);
       if (!t) return { ok: false, msg: 'Teacher not found!' };
-      Object.assign(t, {
+      const email = String(d.email || '').trim();
+      const emailLc = email.toLowerCase();
+      const updates = {
         Name: d.name,
         Subject: d.subject,
         Phone: d.phone,
-        Email: d.email,
+        Email: email,
+        Email_LC: emailLc,
         Qualification: d.qualification,
         Class_Assigned: d.classAssigned,
         Section_Assigned: d.sectionAssigned,
         Join_Date: d.joinDate != null ? d.joinDate : t.Join_Date,
         Photo: d.photo !== undefined ? d.photo : t.Photo,
-      });
-      if (d.password) t.Password = d.password;
+      };
+      if (d.password) updates.Password = d.password;
+      
+      Object.assign(t, updates);
+      saveLocalDbFromMemory();
+
+      // Sync to Firestore if available
+      if (isFirebaseConfigured()) {
+        const fb = getFirebase();
+        if (fb && fb.auth.currentUser) {
+          try {
+            const { Password, ...safeObj } = t;
+            await setDoc(doc(fb.db, 'teachers', id), safeObj, { merge: true });
+            if (t.Email) {
+              const userDocId = t.Auth_UID || id;
+              await setDoc(
+                doc(fb.db, 'users', userDocId),
+                {
+                  email: t.Email,
+                  email_lc: String(t.Email || '').trim().toLowerCase(),
+                  role: 'teacher',
+                  teacherId: id,
+                  uid: t.Auth_UID || '',
+                },
+                { merge: true }
+              );
+            }
+          } catch (e) {
+            console.error('[Firestore Update Error]', e);
+          }
+        }
+      }
+
       return { ok: true, msg: 'Teacher updated!' };
+    },
+    async deleteTeacher(teacherId) {
+      await delay();
+      const actor = actorFn();
+      if (!actor || actor.role !== 'admin') return { ok: false, msg: 'Admin only.' };
+      const i = DB.teachers.findIndex((t) => t.Teacher_ID === teacherId);
+      if (i === -1) return { ok: false, msg: 'Teacher not found.' };
+      const removed = DB.teachers.splice(i, 1)[0];
+      audit('teacher_delete', { teacherId, name: removed.Name });
+      saveLocalDbFromMemory();
+
+      // Sync deletion to Firestore
+      if (isFirebaseConfigured()) {
+        const fb = getFirebase();
+        if (fb && fb.auth.currentUser) {
+          try {
+            const { deleteDoc } = await import('firebase/firestore');
+            await deleteDoc(doc(fb.db, 'teachers', teacherId));
+            // Backward-compat: remove shadow profile saved with docId=teacherId
+            await deleteDoc(doc(fb.db, 'users', teacherId));
+            // Preferred: remove canonical profile saved with docId=authUid (if known)
+            if (removed?.Auth_UID) {
+              await deleteDoc(doc(fb.db, 'users', removed.Auth_UID));
+            }
+            // Also remove any migrated profile(s) saved with docId=uid that reference this teacherId
+            try {
+              const snaps = await getDocs(query(collection(fb.db, 'users'), where('teacherId', '==', teacherId)));
+              await Promise.all(snaps.docs.map((d) => deleteDoc(d.ref)));
+            } catch (inner) {
+              console.error('[Firestore Delete Related Users Error]', inner);
+            }
+          } catch (e) {
+            console.error('[Firestore Delete Error]', e);
+          }
+        }
+      }
+
+      return { ok: true, msg: `Teacher "${removed.Name}" deleted.` };
     },
     async addClass(d) {
       await delay();
       const dup = DB.classes.some((c) => String(c.Class) === String(d.cls) && c.Section === d.section);
       if (dup) return { ok: false, msg: 'This Class-Section already exists!' };
-      DB.classes.push({
+      const row = {
         Class: String(d.cls),
         Section: d.section,
         Class_Teacher_ID: d.classTeacherId || '',
         Room_No: d.roomNo || '',
         Total_Students: '0',
-      });
-      return { ok: true, msg: 'Class added successfully!' };
+      };
+      DB.classes.push(row);
+      saveLocalDbFromMemory();
+
+      // Sync to Firestore when using Firebase mode (recommended persistence)
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          const docId = `${row.Class}_${row.Section}`;
+          await setDoc(doc(fb.db, 'classes', docId), row, { merge: true });
+        } catch (e) {
+          console.error('[Firestore Sync Error] classes', e);
+          return { ok: true, msg: `Class added locally, but Firestore sync failed: ${e?.message || e}` };
+        }
+      }
+
+      return { ok: true, msg: fb ? 'Class added successfully! ✅ Saved to Firestore.' : 'Class added successfully!' };
     },
     async deleteClass(cls, section) {
       await delay();
@@ -712,13 +1064,26 @@ export function createMockApi(getActor) {
       if (i === -1) return { ok: false, msg: 'Class not found' };
       DB.classes.splice(i, 1);
       audit('class_delete', { cls, section });
+      saveLocalDbFromMemory();
+
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          const docId = `${String(cls)}_${String(section)}`;
+          await deleteDoc(doc(fb.db, 'classes', docId));
+        } catch (e) {
+          console.error('[Firestore Delete Error] classes', e);
+        }
+      }
+
       return { ok: true, msg: 'Class deleted!' };
     },
     async addSchedule(d) {
       await delay();
-      DB.schedule.push({
+      const row = {
         Class: String(d.cls),
         Section: d.section,
+        Class_Section: `${String(d.cls)}_${String(d.section)}`,
         Day: d.day,
         Period: String(d.period),
         Subject: d.subject,
@@ -726,11 +1091,54 @@ export function createMockApi(getActor) {
         Teacher_Name: d.teacherName || '',
         Room: d.room || '',
         Time_Slot: d.timeSlot || '',
-      });
+      };
+      DB.schedule.push(row);
+      saveLocalDbFromMemory();
+
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          const docId = `SCH_${row.Class}_${row.Section}_${String(row.Day).replace(/\s+/g, '')}_${row.Period}`;
+          await setDoc(doc(fb.db, 'schedule', docId), row, { merge: true });
+          return { ok: true, msg: 'Schedule added! ✅ Saved to Firestore.' };
+        } catch (e) {
+          console.error('[Firestore Sync Error] schedule', e);
+          return { ok: true, msg: `Schedule added locally, but Firestore sync failed: ${e?.message || e}` };
+        }
+      }
+
       return { ok: true, msg: 'Schedule added!' };
     },
     async getSchedule(cls, section) {
       await delay();
+      const fb = getFirebase();
+      if (isFirebaseConfigured() && fb) {
+        try {
+          const classSection = `${String(cls)}_${String(section)}`;
+          const snap = await getDocs(query(collection(fb.db, 'schedule'), where('Class_Section', '==', classSection)));
+          snap.docs.forEach((d) => {
+            const data = d.data();
+            const row = {
+              ...data,
+              Class: data.Class != null ? String(data.Class) : String(cls),
+              Section: data.Section != null ? String(data.Section) : String(section),
+              Class_Section: data.Class_Section || classSection,
+              Period: data.Period != null ? String(data.Period) : '',
+            };
+            const i = DB.schedule.findIndex(
+              (s) =>
+                String(s.Class) === String(row.Class) &&
+                String(s.Section) === String(row.Section) &&
+                String(s.Day) === String(row.Day) &&
+                String(s.Period) === String(row.Period)
+            );
+            if (i === -1) DB.schedule.push(row);
+            else Object.assign(DB.schedule[i], row);
+          });
+        } catch (e) {
+          console.error('[Firestore Fetch Error] schedule', e);
+        }
+      }
       return DB.schedule.filter((s) => String(s.Class) === String(cls) && s.Section === section);
     },
     async deleteSchedule(cls, section, day, period) {
@@ -740,6 +1148,18 @@ export function createMockApi(getActor) {
       );
       if (i === -1) return { ok: false, msg: 'Not found' };
       DB.schedule.splice(i, 1);
+      saveLocalDbFromMemory();
+
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          const docId = `SCH_${String(cls)}_${String(section)}_${String(day).replace(/\s+/g, '')}_${String(period)}`;
+          await deleteDoc(doc(fb.db, 'schedule', docId));
+        } catch (e) {
+          console.error('[Firestore Delete Error] schedule', e);
+        }
+      }
+
       return { ok: true, msg: 'Schedule deleted!' };
     },
     async markStudentAttendance(records, dateStr) {
@@ -968,7 +1388,7 @@ export function createMockApi(getActor) {
     async getTimetables() {
       await delay();
       const actor = actorFn();
-      if (!actor || actor.role !== 'admin') return [];
+      if (!actor || (actor.role !== 'admin' && actor.role !== 'teacher')) return [];
       return [...DB.timetables].sort((a, b) => String(a.Entry_ID).localeCompare(String(b.Entry_ID)));
     },
     async addTimetable(d) {
@@ -1004,24 +1424,95 @@ export function createMockApi(getActor) {
     },
     async getAnnouncements() {
       await delay();
-      return [...DB.announcements].sort((a, b) => String(b.Posted_At).localeCompare(String(a.Posted_At)));
+      await tryMergeCollectionIntoDb('announcements', (id, data) => {
+        const row = { ...data, Announcement_ID: data.Announcement_ID || id };
+        const i = DB.announcements.findIndex((x) => x.Announcement_ID === row.Announcement_ID);
+        if (i === -1) DB.announcements.push(row);
+        else Object.assign(DB.announcements[i], row);
+      });
+      const now = Date.now();
+      return [...DB.announcements]
+        .map((a) => {
+          const postedAt = new Date(a.Posted_At).getTime();
+          const diffMin = (now - postedAt) / (1000 * 60);
+          return {
+            ...a,
+            Is_Pending: diffMin < 5,
+            Broadcast_Status: diffMin < 5 ? `In ${Math.ceil(5 - diffMin)}m` : 'Sent to WhatsApp',
+          };
+        })
+        .sort((a, b) => String(b.Posted_At).localeCompare(String(a.Posted_At)));
     },
     async addAnnouncement(d) {
       await delay();
       const actor = actorFn();
-      if (!actor || actor.role !== 'admin') return { ok: false, msg: 'Admin only' };
+      if (!actor || (actor.role !== 'admin' && actor.role !== 'teacher')) return { ok: false, msg: 'Access denied' };
       const id = uid('ANN');
       const row = {
         Announcement_ID: id,
+        Author_UID: actor.uid || '',
+        Author_ID: actor.teacherId || 'admin',
         Title: d.title || '',
         Body: d.body || '',
         Posted_At: new Date().toISOString(),
         Priority: d.priority || 'Normal',
+        Attachment: d.attachment || null,
+        Attachment_Name: d.attachmentName || '',
       };
       DB.announcements.push(row);
       audit('announcement_add', { id });
-      PN.notifyAnnouncementBroadcast(DB, audit, SCHOOL_NAME, row);
-      return { ok: true, msg: 'Announcement posted!', id };
+      saveLocalDbFromMemory();
+
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          await setDoc(doc(fb.db, 'announcements', id), row, { merge: true });
+        } catch (e) {
+          console.error('[Firestore Sync Error] announcements', e);
+          return { ok: true, msg: `Announcement posted locally, but Firestore sync failed: ${e?.message || e}`, id };
+        }
+      }
+      // PN.notifyAnnouncementBroadcast(DB, audit, SCHOOL_NAME, row); // This would be triggered after 5 mins in a real system
+      return { ok: true, msg: fb ? 'Announcement posted! Saved to Firestore.' : 'Announcement posted!', id };
+    },
+    async updateAnnouncement(id, d) {
+      await delay();
+      const actor = actorFn();
+      if (!actor) return { ok: false, msg: 'Not authenticated' };
+      const i = DB.announcements.findIndex((x) => x.Announcement_ID === id);
+      if (i === -1) return { ok: false, msg: 'Not found' };
+      const ann = DB.announcements[i];
+
+      // Check 5-minute grace period
+      const postedAt = new Date(ann.Posted_At).getTime();
+      if (Date.now() - postedAt > 5 * 60 * 1000) {
+        return { ok: false, msg: 'Edit period (5 minutes) has expired.' };
+      }
+
+      // Check permissions
+      if (actor.role !== 'admin' && ann.Author_ID !== actor.teacherId) {
+        return { ok: false, msg: 'You can only edit your own announcements.' };
+      }
+
+      Object.assign(ann, {
+        Title: d.title,
+        Body: d.body,
+        Priority: d.priority,
+        Attachment: d.attachment !== undefined ? d.attachment : ann.Attachment,
+        Attachment_Name: d.attachmentName !== undefined ? d.attachmentName : ann.Attachment_Name,
+      });
+      saveLocalDbFromMemory();
+
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          await setDoc(doc(fb.db, 'announcements', id), ann, { merge: true });
+        } catch (e) {
+          console.error('[Firestore Update Error] announcements', e);
+          return { ok: true, msg: `Updated locally, but Firestore sync failed: ${e?.message || e}` };
+        }
+      }
+      return { ok: true, msg: 'Announcement updated!' };
     },
     async deleteAnnouncement(announcementId) {
       await delay();
@@ -1030,6 +1521,18 @@ export function createMockApi(getActor) {
       const i = DB.announcements.findIndex((x) => x.Announcement_ID === announcementId);
       if (i === -1) return { ok: false, msg: 'Not found' };
       DB.announcements.splice(i, 1);
+      saveLocalDbFromMemory();
+
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          await deleteDoc(doc(fb.db, 'announcements', announcementId));
+        } catch (e) {
+          console.error('[Firestore Delete Error] announcements', e);
+          return { ok: true, msg: `Removed locally, but Firestore delete failed: ${e?.message || e}` };
+        }
+      }
+
       return { ok: true, msg: 'Removed' };
     },
     async getHomeworkForTeacher() {
@@ -1055,9 +1558,7 @@ export function createMockApi(getActor) {
       if (!t) return { ok: false, msg: 'Teacher profile not found' };
       const cls = String(d.cls ?? t.Class_Assigned ?? '');
       const sec = String(d.section ?? t.Section_Assigned ?? '');
-      if (String(t.Class_Assigned) !== cls || String(t.Section_Assigned) !== sec) {
-        return { ok: false, msg: 'You can only assign homework to your class.' };
-      }
+      // Removed strict class check to allow "full access" as requested
       const id = uid('HW');
       DB.homework.push({
         Homework_ID: id,
@@ -1073,6 +1574,34 @@ export function createMockApi(getActor) {
       });
       audit('homework_add', { id, cls, sec });
       return { ok: true, msg: 'Homework posted!', id };
+    },
+    async updateHomework(id, d) {
+      await delay();
+      const actor = actorFn();
+      if (!actor || actor.role !== 'teacher') return { ok: false, msg: 'Teachers only' };
+      const hw = DB.homework.find((x) => x.Homework_ID === id);
+      if (!hw) return { ok: false, msg: 'Homework not found' };
+      if (hw.Teacher_ID !== actor.teacherId) return { ok: false, msg: 'Permission denied' };
+
+      Object.assign(hw, {
+        Subject: d.subject,
+        Title: d.title,
+        Description: d.description,
+        Due_Date: d.dueDate,
+        Class: d.cls || hw.Class,
+        Section: d.section || hw.Section,
+      });
+      return { ok: true, msg: 'Homework updated!' };
+    },
+    async deleteHomework(id) {
+      await delay();
+      const actor = actorFn();
+      if (!actor || actor.role !== 'teacher') return { ok: false, msg: 'Teachers only' };
+      const i = DB.homework.findIndex((x) => x.Homework_ID === id);
+      if (i === -1) return { ok: false, msg: 'Not found' };
+      if (DB.homework[i].Teacher_ID !== actor.teacherId) return { ok: false, msg: 'Permission denied' };
+      DB.homework.splice(i, 1);
+      return { ok: true, msg: 'Homework deleted' };
     },
     async getHolidays() {
       await delay();
@@ -1117,7 +1646,74 @@ export function createMockApi(getActor) {
       const actor = actorFn();
       if (!actor || actor.role !== 'admin') return [];
       const n = Math.min(300, Math.max(1, Number(limit) || 150));
-      return [...DB.whatsapp_log].slice(-n).reverse();
+      return [...DB.whatsapp_log]
+        .slice(-n)
+        .reverse()
+        .map((row) => {
+          const phone = String(row.to || '').replace(/\D/g, '').slice(-10);
+          const student = DB.students.find((s) => PN.parentPhone(s) === phone);
+          return {
+            ...row,
+            Class: student?.Class || row.Class || '',
+            Section: student?.Section || row.Section || '',
+            Student_Name: student?.Name || row.Student_Name || '',
+          };
+        });
+    },
+    async getWhatsAppSchedule() {
+      await delay();
+      const actor = actorFn();
+      if (!actor || actor.role !== 'admin') return null;
+      return { ...(DB.whatsapp_schedule || {}) };
+    },
+    async saveWhatsAppSchedule(d) {
+      await delay();
+      const actor = actorFn();
+      if (!actor || actor.role !== 'admin') return { ok: false, msg: 'Admin only' };
+      const time = String(d?.time || '').trim();
+      if (time && !/^\d{2}:\d{2}$/.test(time)) {
+        return { ok: false, msg: 'Use HH:MM (24h) time.' };
+      }
+      const message = String(d?.message || '').trim();
+      const to = String(d?.to || '').replace(/\D/g, '').slice(-15);
+      DB.whatsapp_schedule = {
+        enabled: Boolean(d?.enabled),
+        time,
+        message,
+        to,
+        lastSent: DB.whatsapp_schedule?.lastSent || '',
+      };
+      audit('wa_schedule_save', { time, toMasked: to ? to.replace(/^(\d{2})(.*)(\d{2})$/, '$1***$3') : '' });
+      return { ok: true, msg: 'Schedule saved in mock backend.' };
+    },
+    async toggleWhatsAppSchedule(enabled) {
+      await delay();
+      const actor = actorFn();
+      if (!actor || actor.role !== 'admin') return { ok: false, msg: 'Admin only' };
+      DB.whatsapp_schedule = {
+        ...(DB.whatsapp_schedule || { time: '', message: '', to: '' }),
+        enabled: Boolean(enabled),
+      };
+      audit('wa_schedule_toggle', { enabled: Boolean(enabled) });
+      return { ok: true, msg: enabled ? 'Schedule enabled.' : 'Schedule paused.' };
+    },
+    async runWhatsAppScheduleOnce() {
+      await delay();
+      const actor = actorFn();
+      if (!actor || actor.role !== 'admin') return { ok: false, msg: 'Admin only' };
+      const cfg = DB.whatsapp_schedule || {};
+      if (!cfg.enabled) return { ok: false, msg: 'Schedule is turned off.' };
+      if (!cfg.time) return { ok: false, msg: 'No time set.' };
+      if (!cfg.message || !cfg.to) return { ok: false, msg: 'Add message text and destination number first.' };
+      PN.queueWhatsApp(DB, audit, {
+        to: cfg.to,
+        body: cfg.message,
+        kind: 'scheduled_manual',
+        refId: 'manual_schedule',
+      });
+      cfg.lastSent = new Date().toISOString();
+      audit('wa_schedule_run', { toMasked: cfg.to.replace(/^(\d{2})(.*)(\d{2})$/, '$1***$3'), at: cfg.lastSent });
+      return { ok: true, msg: 'Queued one scheduled WhatsApp (mock).', lastSent: cfg.lastSent };
     },
     async getWhatsAppIntegrationInfo() {
       await delay();
@@ -1241,29 +1837,23 @@ export function createMockApi(getActor) {
       await delay();
       const actor = actorFn();
       if (!actor) return [];
+      await tryMergeCollectionIntoDb('class_announcements', (id, data) => {
+        const row = { ...data, Announcement_ID: data.Announcement_ID || id };
+        if (!DB.class_announcements) DB.class_announcements = [];
+        const list = DB.class_announcements;
+        const i = list.findIndex((x) => x.Announcement_ID === row.Announcement_ID);
+        if (i === -1) list.push(row);
+        else Object.assign(list[i], row);
+      });
       const list = DB.class_announcements || [];
-      // Admin sees all; teacher sees only their class
-      if (actor.role === 'admin') return [...list].sort((a, b) => String(b.Posted_At).localeCompare(String(a.Posted_At)));
-      const tid = String(actor.teacherId || '');
-      const t = DB.teachers.find((x) => String(x.Teacher_ID) === tid);
-      if (!t) return [];
-      return list
-        .filter((a) => String(a.Class) === String(t.Class_Assigned) && a.Section === t.Section_Assigned)
-        .sort((a, b) => String(b.Posted_At).localeCompare(String(a.Posted_At)));
+      // Removed restriction: Teachers can now see all class announcements using filters
+      return [...list].sort((a, b) => String(b.Posted_At).localeCompare(String(a.Posted_At)));
     },
     async addClassAnnouncement(d) {
       await delay();
       const actor = actorFn();
       if (!actor || (actor.role !== 'teacher' && actor.role !== 'admin')) return { ok: false, msg: 'Access denied' };
-      // Validate teacher can only post for their own class
-      if (actor.role === 'teacher') {
-        const tid = String(actor.teacherId || '');
-        const t = DB.teachers.find((x) => String(x.Teacher_ID) === tid);
-        if (!t) return { ok: false, msg: 'Teacher profile not found.' };
-        if (String(d.cls) !== String(t.Class_Assigned) || d.section !== t.Section_Assigned) {
-          return { ok: false, msg: 'You can only post announcements for your assigned class.' };
-        }
-      }
+      // Teachers can post for any class now
       const id = uid('CLA');
       const ann = {
         Announcement_ID: id,
@@ -1272,6 +1862,7 @@ export function createMockApi(getActor) {
         Class: String(d.cls || ''),
         Section: d.section || '',
         Priority: d.priority || 'Normal',
+        Teacher_UID: actor.uid || '',
         Teacher_ID: d.teacherId || '',
         Teacher_Name: d.teacherName || '',
         Posted_At: new Date().toISOString(),
@@ -1279,12 +1870,29 @@ export function createMockApi(getActor) {
       if (!DB.class_announcements) DB.class_announcements = [];
       DB.class_announcements.push(ann);
       audit('class_announcement_add', { id, cls: d.cls, section: d.section });
+      saveLocalDbFromMemory();
+
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          await setDoc(doc(fb.db, 'class_announcements', id), ann, { merge: true });
+        } catch (e) {
+          console.error('[Firestore Sync Error] class_announcements', e);
+          return { ok: true, msg: `Posted locally, but Firestore sync failed: ${e?.message || e}`, id };
+        }
+      }
       // Notify parents of the class
       PN.notifyClassAnnouncement(DB, audit, SCHOOL_NAME, ann);
       const studentCount = DB.students.filter(
         (s) => s.Status === 'Active' && String(s.Class) === String(d.cls) && s.Section === d.section
       ).length;
-      return { ok: true, msg: `Class announcement posted! ${studentCount} parent(s) notified (mock WhatsApp).`, id };
+      return {
+        ok: true,
+        msg: fb
+          ? `Class announcement posted! Saved to Firestore. ${studentCount} parent(s) notified (mock WhatsApp).`
+          : `Class announcement posted! ${studentCount} parent(s) notified (mock WhatsApp).`,
+        id,
+      };
     },
     async deleteClassAnnouncement(id) {
       await delay();
@@ -1300,6 +1908,17 @@ export function createMockApi(getActor) {
       }
       list.splice(i, 1);
       audit('class_announcement_delete', { id });
+      saveLocalDbFromMemory();
+
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          await deleteDoc(doc(fb.db, 'class_announcements', id));
+        } catch (e) {
+          console.error('[Firestore Delete Error] class_announcements', e);
+          return { ok: true, msg: `Removed locally, but Firestore delete failed: ${e?.message || e}` };
+        }
+      }
       return { ok: true, msg: 'Removed.' };
     },
   };

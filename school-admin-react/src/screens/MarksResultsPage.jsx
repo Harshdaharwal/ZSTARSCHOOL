@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardTitle } from '../components/common/Card.jsx';
 import { Button } from '../components/common/Button.jsx';
@@ -12,11 +12,15 @@ import { buildStudentMarksReports } from '../services/marksReportBuilder.js';
 import { createResultPdfBlob, downloadBlob } from '../utils/resultPdf.js';
 import { downloadClassResultsZip } from '../utils/classResultsZip.js';
 import { esc } from '../utils/format.js';
+import { IconEdit, IconTrash } from '../components/common/Icons.jsx';
+import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 
-function TeacherHomeworkSection({ api, classLabel }) {
+function TeacherHomeworkSection({ api, classLabel, cls, sec }) {
   const { showToast } = useToast();
   const load = useCallback(() => api.getHomeworkForTeacher(), [api]);
   const { data: list, loading, refresh } = useAsyncResource(load);
+  const [editing, setEditing] = useState(null);
+  const [confirm, setConfirm] = useState(null);
 
   const submit = useCallback(
     async (e) => {
@@ -27,6 +31,8 @@ function TeacherHomeworkSection({ api, classLabel }) {
         title: fd.get('title'),
         dueDate: fd.get('dueDate'),
         description: fd.get('description'),
+        cls,
+        section: sec,
       });
       showToast(res.msg, res.ok ? 'ok' : 'err');
       if (res.ok) {
@@ -34,75 +40,165 @@ function TeacherHomeworkSection({ api, classLabel }) {
         refresh();
       }
     },
+    [api, refresh, showToast, cls, sec]
+  );
+
+  const update = useCallback(
+    async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const res = await api.updateHomework(editing.Homework_ID, {
+        subject: fd.get('subject'),
+        title: fd.get('title'),
+        dueDate: fd.get('dueDate'),
+        description: fd.get('description'),
+        cls,
+        section: sec,
+      });
+      showToast(res.msg, res.ok ? 'ok' : 'err');
+      if (res.ok) {
+        setEditing(null);
+        refresh();
+      }
+    },
+    [api, editing, refresh, showToast, cls, sec]
+  );
+
+  const remove = useCallback(
+    (id) => {
+      setConfirm({
+        title: 'Delete Homework',
+        message: 'Are you sure you want to delete this homework assignment?',
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: async () => {
+          const res = await api.deleteHomework(id);
+          showToast(res.msg, res.ok ? 'ok' : 'err');
+          if (res.ok) refresh();
+          setConfirm(null);
+        },
+      });
+    },
     [api, refresh, showToast]
   );
 
   return (
-    <Card style={{ marginTop: 16 }}>
-      <CardTitle>Homework ({esc(classLabel)})</CardTitle>
-      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 16 }}>
-        Assign homework for your class. Parents can be informed via WhatsApp digests (Settings) when you enable the integration.
-      </p>
-      <form className="form-grid" onSubmit={submit}>
-        <div className="form-group">
-          <label>Subject *</label>
-          <input name="subject" required placeholder="e.g. Mathematics" />
-        </div>
-        <div className="form-group">
-          <label>Title *</label>
-          <input name="title" required placeholder="Short title" />
-        </div>
-        <div className="form-group">
-          <label>Due date</label>
-          <input name="dueDate" type="date" />
-        </div>
-        <div className="form-group full">
-          <label>Instructions *</label>
-          <textarea name="description" required rows={3} placeholder="What students should complete…" />
-        </div>
-        <div className="form-group full btn-row">
-          <Button type="submit">Post homework</Button>
-        </div>
-      </form>
-      {loading && !list ? (
-        <Spinner />
-      ) : (
-        <div className="tbl-wrap" style={{ marginTop: 20 }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Subject</th>
-                <th>Title</th>
-                <th>Due</th>
-                <th>Posted</th>
-              </tr>
-            </thead>
-            <tbody>
-              {!list?.length ? (
+    <>
+      <Card style={{ marginTop: 16 }}>
+        <CardTitle>Homework ({esc(classLabel)})</CardTitle>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 16 }}>
+          Assign homework for your class. Parents can be informed via WhatsApp digests (Settings) when you enable the integration.
+        </p>
+        <form className="form-grid" onSubmit={submit}>
+          <div className="form-group">
+
+            <label>Subject *</label>
+            <input name="subject" required placeholder="e.g. Mathematics" />
+          </div>
+
+          <div className="form-group">
+            <label>Title *</label>
+            <input name="title" required placeholder="Short title" />
+          </div>
+
+          <div className="form-group">
+            <label>Due date</label>
+            <input name="dueDate" type="date" />
+          </div>
+
+          <div className="form-group full">
+            <label>Instructions *</label>
+            <textarea name="description" required rows={3} placeholder="What students should complete…" />
+          </div>
+
+          <div className="form-group full btn-row">
+            <Button type="submit">Post homework</Button>
+          </div>
+
+        </form>
+
+        {loading && !list ? (
+          <Spinner />
+        ) : (
+          <div className="tbl-wrap" style={{ marginTop: 20 }}>
+            <table>
+              <thead>
                 <tr>
-                  <td colSpan={4} className="empty" style={{ padding: 16 }}>
-                    No homework posted yet.
-                  </td>
+                  <th>Subject</th>
+                  <th>Title</th>
+                  <th>Due</th>
+                  <th>Actions</th>
                 </tr>
-              ) : (
-                list.map((h) => (
-                  <tr key={h.Homework_ID}>
-                    <td>{esc(h.Subject)}</td>
-                    <td>{esc(h.Title)}</td>
-                    <td>{esc(h.Due_Date || '—')}</td>
-                    <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      {h.Created_At
-                        ? new Date(h.Created_At).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })
-                        : '—'}
+              </thead>
+              <tbody>
+                {!list?.length ? (
+                  <tr>
+                    <td colSpan={4} className="empty" style={{ padding: 16 }}>
+                      No homework posted yet.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Card>
+                ) : (
+                  list.map((h) => (
+                    <tr key={h.Homework_ID}>
+                      <td>{esc(h.Subject)}</td>
+                      <td>{esc(h.Title)}</td>
+                      <td>{esc(h.Due_Date || '—')}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <Button variant="ghost" size="sm" onClick={() => setEditing(h)}>
+                            <IconEdit size={14} />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => remove(h.Homework_ID)} style={{ color: 'var(--err)' }}>
+                            <IconTrash size={14} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Modal open={!!editing} title="Edit Homework" onClose={() => setEditing(null)}>
+        {editing && (
+          <form className="form-grid" onSubmit={update}>
+            <div className="form-group">
+              <label>Subject *</label>
+              <input name="subject" required defaultValue={editing.Subject} />
+            </div>
+            <div className="form-group">
+              <label>Title *</label>
+              <input name="title" required defaultValue={editing.Title} />
+            </div>
+            <div className="form-group">
+              <label>Due date</label>
+              <input name="dueDate" type="date" defaultValue={editing.Due_Date} />
+            </div>
+            <div className="form-group full">
+              <label>Instructions *</label>
+              <textarea name="description" required rows={5} defaultValue={editing.Description} />
+            </div>
+            <div className="form-group full btn-row">
+              <Button type="submit">Update homework</Button>
+              <Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmLabel={confirm?.confirmLabel}
+        danger={confirm?.danger}
+        onConfirm={confirm?.onConfirm}
+        onCancel={() => setConfirm(null)}
+      />
+    </>
   );
 }
 
@@ -124,13 +220,21 @@ export default function MarksResultsPage({ teacherAccess = false }) {
   );
   const { data, loading, error, refresh } = useAsyncResource(load);
 
-  const teacherFilter = useMemo(() => {
+  const initialDefaults = useMemo(() => {
     if (!teacherAccess || !data?.meta || data.meta.noProfile) return null;
     return {
       cls: String(data.meta.class ?? ''),
       sec: String(data.meta.section ?? ''),
     };
   }, [teacherAccess, data]);
+
+  // Set initial filters once data loads
+  useEffect(() => {
+    if (initialDefaults && !cls) {
+      setCls(initialDefaults.cls);
+      setSec(initialDefaults.sec);
+    }
+  }, [initialDefaults, cls]);
 
   const classOptions = useMemo(() => {
     if (!data) return [];
@@ -140,22 +244,16 @@ export default function MarksResultsPage({ teacherAccess = false }) {
 
   const sectionOptions = useMemo(() => {
     if (!data) return [];
-    const c = teacherFilter?.cls ?? cls;
+    const c = cls;
     if (!c) return [];
     const set = new Set(
       data.students.filter((s) => String(s.Class) === String(c)).map((s) => s.Section)
     );
     return [...set].sort((a, b) => a.localeCompare(b));
-  }, [data, cls, teacherFilter]);
+  }, [data, cls]);
 
-  const sectionForFilter = useMemo(() => {
-    if (teacherFilter) return teacherFilter.sec;
-    if (!cls) return '';
-    return sectionOptions.includes(sec) ? sec : '';
-  }, [teacherFilter, cls, sec, sectionOptions]);
-
-  const filterClass = teacherFilter ? teacherFilter.cls : cls;
-  const filterSection = teacherFilter ? teacherFilter.sec : sectionForFilter;
+  const filterClass = cls;
+  const filterSection = sec;
 
   const reports = useMemo(() => {
     if (!data) return [];
@@ -257,7 +355,7 @@ export default function MarksResultsPage({ teacherAccess = false }) {
       <SectionHeader title={teacherAccess ? t('nav.results') : 'Marks & results'} />
       <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 16, fontWeight: 600 }}>
         {teacherAccess
-          ? `View marks for your assigned class ${teacherFilter?.cls ?? ''}${teacherFilter?.sec ? `–${teacherFilter.sec}` : ''}. Open a student’s result or download a single PDF.${
+          ? `View marks for your assigned class. Open a student’s result or download a single PDF.${
               data?.meta?.teacherName ? ` (${data.meta.teacherName})` : ''
             }`
           : 'Filter by class and section (e.g. class 12 + section A → “12A”). View the matrix, open a student’s result in the modal, or export CSV / single PDF / class ZIP (ZIP uses roll number as each PDF file name).'}
@@ -269,14 +367,13 @@ export default function MarksResultsPage({ teacherAccess = false }) {
           <label>
             Class
             <select
-              value={teacherFilter ? teacherFilter.cls : cls}
+              value={cls}
               onChange={(e) => {
                 setCls(e.target.value);
                 setSec('');
               }}
-              disabled={teacherAccess}
             >
-              <option value="">{teacherAccess ? 'Your class' : 'All classes'}</option>
+              <option value="">All classes</option>
               {classOptions.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -287,11 +384,11 @@ export default function MarksResultsPage({ teacherAccess = false }) {
           <label>
             Section
             <select
-              value={teacherFilter ? teacherFilter.sec : sectionForFilter}
+              value={sec}
               onChange={(e) => setSec(e.target.value)}
-              disabled={teacherAccess || !cls}
+              disabled={!cls}
             >
-              <option value="">{teacherAccess ? 'Your section' : 'All sections'}</option>
+              <option value="">All sections</option>
               {sectionOptions.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -312,8 +409,8 @@ export default function MarksResultsPage({ teacherAccess = false }) {
         )}
       </Card>
 
-      {teacherAccess && teacherFilter && typeof api.getHomeworkForTeacher === 'function' && (
-        <TeacherHomeworkSection api={api} classLabel={`${teacherFilter.cls}–${teacherFilter.sec}`} />
+      {teacherAccess && typeof api.getHomeworkForTeacher === 'function' && (
+        <TeacherHomeworkSection api={api} classLabel={`${filterClass || 'All'}–${filterSection || 'All'}`} cls={filterClass} sec={filterSection} />
       )}
 
       <Card style={{ marginTop: 16 }}>

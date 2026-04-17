@@ -5,13 +5,15 @@ import { Modal } from '../components/common/Modal.jsx';
 import { SectionHeader } from '../components/common/SectionHeader.jsx';
 import { Spinner } from '../components/common/Spinner.jsx';
 import { PaginationBar } from '../components/common/PaginationBar.jsx';
+import { IconCamera, IconTeachers, IconPlus, IconRefresh, IconTrash } from '../components/common/Icons.jsx';
+import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 import { useApi } from '../hooks/useApi.js';
 import { useAsyncResource } from '../hooks/useAsyncResource.js';
 import { useToast } from '../hooks/useToast.js';
 import { esc } from '../utils/format.js';
 
 const PAGE_SIZE = 10;
-const MAX_PHOTO_BYTES = 4 * 1024 * 1024; // 4 MB
+const MAX_PHOTO_BYTES = 200 * 1024; // 200 KB
 
 /* ── Photo Picker ───────────────────────────────────────────────────── */
 function PhotoPicker({ value, onChange }) {
@@ -22,7 +24,8 @@ function PhotoPicker({ value, onChange }) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > MAX_PHOTO_BYTES) {
-      showToast('Photo must be 4 MB or smaller.', 'err');
+      const selectedKb = Math.ceil(file.size / 1024);
+      showToast(`Photo is ${selectedKb}KB. Maximum allowed is 200KB.`, 'err');
       e.target.value = '';
       return;
     }
@@ -54,13 +57,13 @@ function PhotoPicker({ value, onChange }) {
         {value ? (
           <img src={value} alt="Photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <span style={{ fontSize: 32, opacity: 0.4 }}>📷</span>
+          <IconCamera size={28} style={{ opacity: 0.35 }} strokeWidth={1.5} />
         )}
       </div>
       <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center' }}>
         {value ? 'Click to change' : 'Click to add photo'}
         <br />
-        Max 4 MB
+        Max 200 KB
       </span>
       <input
         ref={inputRef}
@@ -94,11 +97,11 @@ function PhotoThumb({ src, name }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: 18,
         border: '2px solid var(--border,#e0e0e0)',
+        color: 'rgba(99,102,241,0.7)',
       }}
     >
-      👨‍🏫
+      <IconCamera size={16} strokeWidth={1.5} style={{ opacity: 0.6 }} />
     </div>
   );
 }
@@ -139,6 +142,8 @@ export default function TeachersPage() {
   const [addPhoto, setAddPhoto] = useState('');
   // Photo state for edit modal
   const [editPhoto, setEditPhoto] = useState('');
+  // Teacher being deleted (for confirmation)
+  const [deletingTeacher, setDeletingTeacher] = useState(null);
 
   const submitAdd = useCallback(
     async (e) => {
@@ -207,12 +212,25 @@ export default function TeachersPage() {
     [api, edit, editPhoto, refresh, showToast]
   );
 
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deletingTeacher) return;
+    try {
+      const res = await api.deleteTeacher(deletingTeacher.Teacher_ID);
+      showToast(res.msg, res.ok ? 'ok' : 'err');
+      if (res.ok) refresh();
+    } catch {
+      showToast('Failed to delete teacher.', 'err');
+    } finally {
+      setDeletingTeacher(null);
+    }
+  }, [api, deletingTeacher, refresh, showToast]);
+
   if (loading && !teachers) return <Spinner />;
 
   return (
     <>
       <Card>
-        <CardTitle>➕ Add Teacher</CardTitle>
+        <CardTitle><IconPlus size={16} strokeWidth={2.5} style={{ verticalAlign: 'middle', marginRight: 6 }} />Add Teacher</CardTitle>
         <form className="form-grid" onSubmit={submitAdd}>
           {/* Photo picker */}
           <div className="form-group full" style={{ display: 'flex', justifyContent: 'center' }}>
@@ -279,9 +297,9 @@ export default function TeachersPage() {
       </Card>
 
       <Card>
-        <SectionHeader title="📋 All Teachers" actions={<Button onClick={() => refresh()}>🔄 Refresh</Button>} />
+        <SectionHeader title="All Teachers" actions={<Button onClick={() => refresh()} size="sm" variant="ghost"><IconRefresh size={14} /> Refresh</Button>} />
         <div className="filter-bar">
-          <input placeholder="🔍 Search" style={{ flex: 1 }} value={q} onChange={(e) => setQ(e.target.value)} />
+          <input placeholder="Search…" style={{ flex: 1 }} value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="tbl-wrap">
           <table>
@@ -332,6 +350,16 @@ export default function TeachersPage() {
                         }}
                       >
                         Edit
+                      </Button>{' '}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setDeletingTeacher(t)}
+                        title="Delete teacher"
+                        style={{ color: 'var(--danger, #e53935)' }}
+                      >
+                        <IconTrash size={14} />
                       </Button>
                     </td>
                   </tr>
@@ -365,11 +393,11 @@ export default function TeachersPage() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: 48,
                     border: '3px solid var(--border,#e0e0e0)',
+                    color: 'rgba(99,102,241,0.6)',
                   }}
                 >
-                  👨‍🏫
+                  <IconCamera size={48} strokeWidth={1.2} style={{ opacity: 0.5 }} />
                 </div>
               )}
             </div>
@@ -468,6 +496,16 @@ export default function TeachersPage() {
           </form>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!deletingTeacher}
+        title="Delete Teacher"
+        message={deletingTeacher ? `Are you sure you want to permanently delete teacher "${deletingTeacher.Name}" (${deletingTeacher.Teacher_ID})? This action cannot be undone.` : ''}
+        confirmLabel="Delete"
+        danger
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeletingTeacher(null)}
+      />
     </>
   );
 }

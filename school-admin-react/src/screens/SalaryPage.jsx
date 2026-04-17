@@ -13,6 +13,7 @@ import { StatCard } from '../components/common/StatCard.jsx';
 import { Button } from '../components/common/Button.jsx';
 import { SectionHeader } from '../components/common/SectionHeader.jsx';
 import { Spinner } from '../components/common/Spinner.jsx';
+import { IconCalendar, IconChartBar, IconRefresh, IconPlus, IconSalary, IconBriefcase, IconBuilding, IconClock, IconCheck, IconTeachers } from '../components/common/Icons.jsx';
 import { useApi } from '../hooks/useApi.js';
 import { useAsyncResource } from '../hooks/useAsyncResource.js';
 import { useToast } from '../hooks/useToast.js';
@@ -26,9 +27,9 @@ const MONTHS = [
 ];
 
 const PERIOD_OPTS = [
-  { id: 'monthly', label: '📅 Monthly' },
-  { id: 'weekly', label: '📆 Weekly (this month)' },
-  { id: 'yearly', label: '📊 Yearly' },
+  { id: 'monthly', label: 'Monthly', Icon: IconCalendar },
+  { id: 'weekly', label: 'Weekly (this month)', Icon: IconCalendar },
+  { id: 'yearly', label: 'Yearly', Icon: IconChartBar },
 ];
 
 const chartOptions = {
@@ -144,8 +145,8 @@ export default function SalaryPage() {
       return {
         labels: months.map((m) => m.slice(0, 3)),
         datasets: [
-          { label: '👨‍🏫 Teacher Salary', data: teacherByMonth, backgroundColor: '#6366f1' },
-          { label: '🏢 Staff Salary', data: staffByMonth, backgroundColor: '#f59e0b' },
+          { label: 'Teacher Salary', data: teacherByMonth, backgroundColor: '#6366f1' },
+          { label: 'Staff Salary', data: staffByMonth, backgroundColor: '#f59e0b' },
         ],
       };
     }
@@ -162,8 +163,8 @@ export default function SalaryPage() {
       return {
         labels,
         datasets: [
-          { label: '👨‍🏫 Teacher Salary', data: teacherWeek, backgroundColor: '#6366f1' },
-          { label: '🏢 Staff Salary', data: staffWeek, backgroundColor: '#f59e0b' },
+          { label: 'Teacher Salary', data: teacherWeek, backgroundColor: '#6366f1' },
+          { label: 'Staff Salary', data: staffWeek, backgroundColor: '#f59e0b' },
         ],
       };
     }
@@ -173,7 +174,7 @@ export default function SalaryPage() {
       labels: ['Teachers', 'Staff'],
       datasets: [
         {
-          label: '✅ Paid',
+          label: 'Paid',
           data: [
             filteredRecords.filter((s) => s.Role === 'teacher' && s.Status === 'Paid').reduce((sum, s) => sum + Number(s.Amount || 0), 0),
             filteredRecords.filter((s) => s.Role === 'staff' && s.Status === 'Paid').reduce((sum, s) => sum + Number(s.Amount || 0), 0),
@@ -181,7 +182,7 @@ export default function SalaryPage() {
           backgroundColor: '#10b981',
         },
         {
-          label: '⏳ Pending',
+          label: 'Pending',
           data: [
             filteredRecords.filter((s) => s.Role === 'teacher' && s.Status === 'Pending').reduce((sum, s) => sum + Number(s.Amount || 0), 0),
             filteredRecords.filter((s) => s.Role === 'staff' && s.Status === 'Pending').reduce((sum, s) => sum + Number(s.Amount || 0), 0),
@@ -246,14 +247,14 @@ export default function SalaryPage() {
     <>
       {/* ── Page Header ── */}
       <SectionHeader
-        title="💼 Salary Management"
+        title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><IconBriefcase size={18} strokeWidth={2} />Salary Management</span>}
         actions={
           <div className="btn-row">
             <Button size="sm" onClick={() => setShowAddForm((v) => !v)}>
               {showAddForm ? '✕ Cancel' : '＋ Add Record'}
             </Button>
             <Button variant="ghost" size="sm" onClick={refresh}>
-              🔄 Refresh
+              <IconRefresh size={14} /> Refresh
             </Button>
           </div>
         }
@@ -262,7 +263,7 @@ export default function SalaryPage() {
       {/* ── Add Form ── */}
       {showAddForm && (
         <Card style={{ marginBottom: 24 }}>
-          <div className="card-title">➕ Add Salary Record</div>
+          <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconPlus size={16} strokeWidth={2.5} /> Add Salary Record</div>
           <form className="form-grid" onSubmit={handleAdd}>
             <div className="form-group">
               <label>Staff ID</label>
@@ -380,7 +381,7 @@ export default function SalaryPage() {
 
         <input
           className="search-input"
-          placeholder="🔍 Search name / ID…"
+          placeholder="Search name / ID…"
           value={searchQ}
           onChange={(e) => setSearchQ(e.target.value)}
           style={{ fontSize: '0.85rem', padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input, var(--bg-card))', color: 'inherit', minWidth: 180 }}
@@ -391,34 +392,34 @@ export default function SalaryPage() {
       <div className="stats-grid" style={{ marginBottom: 24 }}>
         <StatCard
           variant="s1"
-          icon="💼"
+          icon={<IconBriefcase size={24} strokeWidth={1.8} />}
           label="Total Expenditure"
           value={fmtINR(stats.totalExpenditure)}
           sub={`${filteredRecords.length} records`}
         />
         <StatCard
           variant="s2"
-          icon="✅"
+          icon={<IconCheck size={24} strokeWidth={1.8} />}
           label="Paid Amount"
           value={fmtINR(stats.paidExpenditure)}
           sub={`${stats.paidCount} paid`}
         />
         <StatCard
           variant="s5"
-          icon="⏳"
+          icon={<IconClock size={24} strokeWidth={1.8} />}
           label="Pending Amount"
           value={fmtINR(stats.pendingExpenditure)}
           sub={`${stats.pendingCount} pending`}
         />
         <StatCard
           variant="s3"
-          icon="👨‍🏫"
+          icon={<IconTeachers size={24} strokeWidth={1.8} />}
           label="Teacher Salary"
           value={fmtINR(stats.teacherTotal)}
         />
         <StatCard
           variant="s4"
-          icon="🏢"
+          icon={<IconBuilding size={24} strokeWidth={1.8} />}
           label="Staff Salary"
           value={fmtINR(stats.staffTotal)}
         />
@@ -428,11 +429,14 @@ export default function SalaryPage() {
       {barChartData && (
         <ChartCard
           title={
-            period === 'yearly'
-              ? `📊 Monthly Salary Breakdown — ${selYear}`
-              : period === 'weekly'
-              ? `📆 Weekly Salary Distribution — ${MONTHS[now.getMonth()]} ${now.getFullYear()}`
-              : `📅 Salary Status — ${MONTHS[selMonth]} ${selYear}`
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+              {period === 'yearly' ? <IconChartBar size={15} strokeWidth={2} /> : <IconCalendar size={15} strokeWidth={2} />}
+              {period === 'yearly'
+                ? `Monthly Salary Breakdown — ${selYear}`
+                : period === 'weekly'
+                ? `Weekly Salary Distribution — ${MONTHS[now.getMonth()]} ${now.getFullYear()}`
+                : `Salary Status — ${MONTHS[selMonth]} ${selYear}`}
+            </span>
           }
           style={{ marginBottom: 24 }}
         >
@@ -445,7 +449,7 @@ export default function SalaryPage() {
       {/* ── Records Table ── */}
       <Card>
         <div className="card-title">
-          📋 Salary Records
+          <IconSalary size={16} strokeWidth={2} style={{ marginRight: 6 }} /> Salary Records
           <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8 }}>
             {filteredRecords.length} result{filteredRecords.length !== 1 ? 's' : ''}
           </span>
@@ -487,7 +491,9 @@ export default function SalaryPage() {
                           color: s.Role === 'teacher' ? '#6366f1' : '#d97706',
                         }}
                       >
-                        {s.Role === 'teacher' ? '👨‍🏫 Teacher' : '🏢 Staff'}
+                        {s.Role === 'teacher'
+                          ? <><IconTeachers size={12} strokeWidth={2} style={{ marginRight: 4, verticalAlign: 'middle' }} />Teacher</>
+                          : <><IconBuilding size={12} strokeWidth={2} style={{ marginRight: 4, verticalAlign: 'middle' }} />Staff</>}
                       </span>
                     </td>
                     <td>{esc(s.Designation)}</td>
@@ -509,7 +515,9 @@ export default function SalaryPage() {
                           color: s.Status === 'Paid' ? '#059669' : '#dc2626',
                         }}
                       >
-                        {s.Status === 'Paid' ? '✅ Paid' : '⏳ Pending'}
+                        {s.Status === 'Paid'
+                          ? <><IconCheck size={12} strokeWidth={2.5} style={{ marginRight: 4, verticalAlign: 'middle' }} />Paid</>
+                          : <><IconClock size={12} strokeWidth={2} style={{ marginRight: 4, verticalAlign: 'middle' }} />Pending</>}
                       </span>
                     </td>
                     <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>

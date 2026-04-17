@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { createUseStyles } from 'react-jss';
 import { Button } from '../components/common/Button.jsx';
+import { IconSchool } from '../components/common/Icons.jsx';
 import { useAuth } from '../hooks/useAuth.js';
 import { useToast } from '../hooks/useToast.js';
 import { DEMO_ADMIN, DEMO_TEACHER } from '../config/authCredentials.js';
@@ -181,7 +182,7 @@ export default function LoginPage() {
       </a>
       <div className={classes.card} id="main-content">
         <div className={classes.brand}>
-          <span className={classes.brandIcon}>🏫</span>
+          <span className={classes.brandIcon}><IconSchool size={40} strokeWidth={1.5} style={{ color: 'var(--accent)' }} /></span>
           <div className={classes.brandTextContainer}>
             <h1>{t('schoolName')}</h1>
             <p>{isFirebase ? t('login.firebaseHint') : adminMode ? t('login.adminTitle') : t('login.teacherTitle')}</p>

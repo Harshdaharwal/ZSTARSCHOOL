@@ -19,6 +19,7 @@ const GAS_METHODS = [
   'getStudentsByClass',
   'addTeacher',
   'updateTeacher',
+  'deleteTeacher',
   'addClass',
   'deleteClass',
   'addSchedule',

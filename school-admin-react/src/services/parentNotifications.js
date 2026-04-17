@@ -132,7 +132,7 @@ export function notifyClassAnnouncement(DB, audit, schoolName, ann) {
     if (!phone || seen.has(phone)) continue;
     seen.add(phone);
     const who = sec ? `Class ${cls}-${sec}` : `Class ${cls}`;
-    const body = `[${schoolName}] 📢 Class Notice (${who})\n${ann.Title}\n\n${ann.Body}\n— ${ann.Teacher_Name || 'Your Teacher'}`;
+    const body = `[${schoolName}] Class Notice (${who})\n${ann.Title}\n\n${ann.Body}\n— ${ann.Teacher_Name || 'Your Teacher'}`;
     queueWhatsApp(DB, audit, { to: phone, body, kind: 'class_announcement', refId: ann.Announcement_ID });
   }
 }

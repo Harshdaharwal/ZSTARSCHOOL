@@ -5,16 +5,21 @@ import { SectionHeader } from '../components/common/SectionHeader.jsx';
 import { Spinner } from '../components/common/Spinner.jsx';
 import { useApi } from '../hooks/useApi.js';
 import { useAsyncResource } from '../hooks/useAsyncResource.js';
+import { useAuth } from '../hooks/useAuth.js';
 import { useToast } from '../hooks/useToast.js';
 import { esc } from '../utils/format.js';
+import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 
 const TYPES = ['Class', 'Test', 'Exam', 'Other'];
 
 export default function TimetablesPage() {
   const api = useApi();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const { showToast } = useToast();
   const load = useCallback(() => api.getTimetables(), [api]);
   const { data: rows, loading, refresh } = useAsyncResource(load);
+  const [confirm, setConfirm] = useState(null);
 
   const submit = useCallback(
     async (e) => {
@@ -42,10 +47,19 @@ export default function TimetablesPage() {
   );
 
   const remove = useCallback(
-    async (id) => {
-      const res = await api.deleteTimetable(id);
-      showToast(res.msg, res.ok ? 'ok' : 'err');
-      if (res.ok) refresh();
+    (id) => {
+      setConfirm({
+        title: 'Delete Timetable Entry',
+        message: 'Are you sure you want to remove this timetable entry? This cannot be undone.',
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: async () => {
+          const res = await api.deleteTimetable(id);
+          showToast(res.msg, res.ok ? 'ok' : 'err');
+          if (res.ok) refresh();
+          setConfirm(null);
+        },
+      });
     },
     [api, refresh, showToast]
   );
@@ -59,75 +73,77 @@ export default function TimetablesPage() {
         Manage class routines, tests, exams, and other scheduled events (demo / local backend).
       </p>
 
-      <Card>
-        <CardTitle>Add timetable entry</CardTitle>
-        <form className="form-grid" onSubmit={submit}>
-          <div className="form-group">
-            <label>Type *</label>
-            <select name="type" required defaultValue="Class">
-              {TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Title *</label>
-            <input name="title" required placeholder="e.g. Mid-term Science" />
-          </div>
-          <div className="form-group">
-            <label>Class</label>
-            <select name="cls">
-              <option value="">—</option>
-              {[...Array(12)].map((_, i) => (
-                <option key={i + 1}>{i + 1}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Section</label>
-            <select name="section">
-              <option value="">—</option>
-              {['A', 'B', 'C', 'D'].map((x) => (
-                <option key={x}>{x}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Day (weekly)</label>
-            <select name="day">
-              <option value="">—</option>
-              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d) => (
-                <option key={d}>{d}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Event date (tests/exams)</label>
-            <input name="eventDate" placeholder="dd/mm/yyyy" />
-          </div>
-          <div className="form-group">
-            <label>Time slot</label>
-            <input name="timeSlot" placeholder="09:00–10:00" />
-          </div>
-          <div className="form-group">
-            <label>Room</label>
-            <input name="room" />
-          </div>
-          <div className="form-group">
-            <label>Subject</label>
-            <input name="subject" />
-          </div>
-          <div className="form-group full">
-            <label>Notes</label>
-            <textarea name="notes" rows={2} />
-          </div>
-          <div className="form-group full btn-row">
-            <Button type="submit">Save entry</Button>
-          </div>
-        </form>
-      </Card>
+      {isAdmin && (
+        <Card>
+          <CardTitle>Add timetable entry</CardTitle>
+          <form className="form-grid" onSubmit={submit}>
+            <div className="form-group">
+              <label>Type *</label>
+              <select name="type" required defaultValue="Class">
+                {TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Title *</label>
+              <input name="title" required placeholder="e.g. Mid-term Science" />
+            </div>
+            <div className="form-group">
+              <label>Class</label>
+              <select name="cls">
+                <option value="">—</option>
+                {[...Array(12)].map((_, i) => (
+                  <option key={i + 1}>{i + 1}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Section</label>
+              <select name="section">
+                <option value="">—</option>
+                {['A', 'B', 'C', 'D'].map((x) => (
+                  <option key={x}>{x}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Day (weekly)</label>
+              <select name="day">
+                <option value="">—</option>
+                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d) => (
+                  <option key={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Event date (tests/exams)</label>
+              <input name="eventDate" placeholder="dd/mm/yyyy" />
+            </div>
+            <div className="form-group">
+              <label>Time slot</label>
+              <input name="timeSlot" placeholder="09:00–10:00" />
+            </div>
+            <div className="form-group">
+              <label>Room</label>
+              <input name="room" />
+            </div>
+            <div className="form-group">
+              <label>Subject</label>
+              <input name="subject" />
+            </div>
+            <div className="form-group full">
+              <label>Notes</label>
+              <textarea name="notes" rows={2} />
+            </div>
+            <div className="form-group full btn-row">
+              <Button type="submit">Save entry</Button>
+            </div>
+          </form>
+        </Card>
+      )}
 
       <Card style={{ marginTop: 24 }}>
         <SectionHeader title="All entries" actions={<Button onClick={() => refresh()}>Refresh</Button>} />
@@ -163,9 +179,11 @@ export default function TimetablesPage() {
                     <td>{esc(r.Time_Slot)}</td>
                     <td>{esc(r.Room)}</td>
                     <td>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => remove(r.Entry_ID)}>
-                        Delete
-                      </Button>
+                      {isAdmin && (
+                        <Button type="button" variant="ghost" size="sm" onClick={() => remove(r.Entry_ID)}>
+                          Delete
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -174,6 +192,16 @@ export default function TimetablesPage() {
           </table>
         </div>
       </Card>
+
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmLabel={confirm?.confirmLabel}
+        danger={confirm?.danger}
+        onConfirm={confirm?.onConfirm}
+        onCancel={() => setConfirm(null)}
+      />
     </>
   );
 }

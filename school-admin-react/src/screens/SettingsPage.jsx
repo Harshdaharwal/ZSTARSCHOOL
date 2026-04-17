@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardTitle } from '../components/common/Card.jsx';
 import { Button } from '../components/common/Button.jsx';
@@ -9,6 +9,7 @@ import { useAsyncResource } from '../hooks/useAsyncResource.js';
 import { useToast } from '../hooks/useToast.js';
 import { esc } from '../utils/format.js';
 import { SCHOOL_NAME, ACADEMIC_YEAR, WHATSAPP_DELIVERY_MODE } from '../config/schoolConfig.js';
+import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 
 export default function SettingsPage() {
   const { t } = useTranslation();
@@ -19,6 +20,17 @@ export default function SettingsPage() {
   const [holStart, setHolStart] = useState('');
   const [holEnd, setHolEnd] = useState('');
   const [waBusy, setWaBusy] = useState(false);
+  const [waClassFilter, setWaClassFilter] = useState('');
+  const [waPage, setWaPage] = useState(1);
+  const [waSchedSaving, setWaSchedSaving] = useState(false);
+  const [waSched, setWaSched] = useState({
+    enabled: false,
+    time: '',
+    message: '',
+    to: '',
+    lastSent: '',
+  });
+  const [confirm, setConfirm] = useState(null);
 
   const waSupported = typeof api.getWhatsAppLog === 'function';
 
@@ -35,10 +47,36 @@ export default function SettingsPage() {
   const { data: holidays, loading: holidaysLoading, refresh: refreshHolidays } = useAsyncResource(loadHolidays);
 
   const loadWaLog = useCallback(
-    () => (typeof api.getWhatsAppLog === 'function' ? api.getWhatsAppLog(120) : Promise.resolve([])),
+    () => (typeof api.getWhatsAppLog === 'function' ? api.getWhatsAppLog(300) : Promise.resolve([])),
     [api]
   );
   const { data: waLog, loading: waLogLoading, refresh: refreshWaLog } = useAsyncResource(loadWaLog);
+
+  const loadClasses = useCallback(
+    () => (typeof api.getAllClasses === 'function' ? api.getAllClasses() : Promise.resolve([])),
+    [api]
+  );
+  const { data: classes } = useAsyncResource(loadClasses);
+
+  const loadWaSchedule = useCallback(
+    () => (typeof api.getWhatsAppSchedule === 'function' ? api.getWhatsAppSchedule() : Promise.resolve(null)),
+    [api]
+  );
+  const { data: waSchedule, refresh: refreshWaSchedule } = useAsyncResource(loadWaSchedule);
+
+  useEffect(() => {
+    if (waSchedule) {
+      setWaSched({
+        enabled: Boolean(waSchedule.enabled),
+        time: waSchedule.time || '',
+        message:
+          waSchedule.message ||
+          `[${SCHOOL_NAME}] Reminder: School fee/payment update. Please settle any pending dues. Reach out to the office for help.`,
+        to: waSchedule.to || '',
+        lastSent: waSchedule.lastSent || '',
+      });
+    }
+  }, [waSchedule]);
 
   const loadWaInfo = useCallback(
     () =>
@@ -48,6 +86,32 @@ export default function SettingsPage() {
     [api]
   );
   const { data: waInfo } = useAsyncResource(loadWaInfo);
+
+  const waClassOptions = useMemo(() => {
+    const set = new Set();
+    (classes || []).forEach((c) => {
+      if (c?.Class != null && String(c.Class).trim()) set.add(String(c.Class).trim());
+    });
+    (waLog || []).forEach((row) => {
+      if (row?.Class != null && String(row.Class).trim()) set.add(String(row.Class).trim());
+    });
+    return [...set].sort((a, b) => Number(a) - Number(b) || a.localeCompare(b));
+  }, [classes, waLog]);
+
+  const filteredWaLog = useMemo(() => {
+    const rows = waLog || [];
+    if (!waClassFilter) return rows;
+    return rows.filter((row) => String(row.Class || '') === String(waClassFilter));
+  }, [waLog, waClassFilter]);
+
+  const WA_PAGE_SIZE = 30;
+  const waTotalPages = Math.max(1, Math.ceil(filteredWaLog.length / WA_PAGE_SIZE));
+  const waCurrentPage = Math.min(waPage, waTotalPages);
+  const pagedWaLog = filteredWaLog.slice((waCurrentPage - 1) * WA_PAGE_SIZE, waCurrentPage * WA_PAGE_SIZE);
+
+  useEffect(() => {
+    setWaPage(1);
+  }, [waClassFilter, waLog]);
 
   const saveHoliday = useCallback(async () => {
     if (!holTitle.trim() || !holStart || !holEnd) {
@@ -67,12 +131,20 @@ export default function SettingsPage() {
   }, [api, holTitle, holStart, holEnd, showToast, refreshHolidays, refreshWaLog]);
 
   const removeHoliday = useCallback(
-    async (id) => {
+    (id) => {
       if (typeof api.deleteHoliday !== 'function') return;
-      if (!window.confirm('Remove this holiday?')) return;
-      const r = await api.deleteHoliday(id);
-      showToast(r.msg, r.ok ? 'ok' : 'err');
-      if (r.ok) refreshHolidays();
+      setConfirm({
+        title: 'Remove Holiday',
+        message: 'Are you sure you want to remove this holiday? This will also resume automated notifications for those days.',
+        confirmLabel: 'Remove',
+        danger: true,
+        onConfirm: async () => {
+          const r = await api.deleteHoliday(id);
+          showToast(r.msg, r.ok ? 'ok' : 'err');
+          if (r.ok) refreshHolidays();
+          setConfirm(null);
+        },
+      });
     },
     [api, showToast, refreshHolidays]
   );
@@ -108,6 +180,50 @@ export default function SettingsPage() {
       const r = await api.simulateMonthlyWhatsAppReports();
       showToast(r.msg, r.skipped ? 'ok' : r.ok ? 'ok' : 'err');
       if (r.ok) refreshWaLog();
+    } finally {
+      setWaBusy(false);
+    }
+  }, [api, showToast, refreshWaLog]);
+
+  const saveWaSchedule = useCallback(async () => {
+    if (typeof api.saveWhatsAppSchedule !== 'function') return;
+    if (!waSched.time) {
+      showToast('Pick a time (HH:MM).', 'err');
+      return;
+    }
+    if (!waSched.to) {
+      showToast('Enter destination number.', 'err');
+      return;
+    }
+    setWaSchedSaving(true);
+    try {
+      const r = await api.saveWhatsAppSchedule(waSched);
+      showToast(r.msg, r.ok ? 'ok' : 'err');
+      refreshWaSchedule();
+    } finally {
+      setWaSchedSaving(false);
+    }
+  }, [api, waSched, showToast, refreshWaSchedule]);
+
+  const toggleWaSchedule = useCallback(
+    async (enabled) => {
+      if (typeof api.toggleWhatsAppSchedule !== 'function') return;
+      setWaSched((s) => ({ ...s, enabled }));
+      const r = await api.toggleWhatsAppSchedule(enabled);
+      showToast(r.msg, r.ok ? 'ok' : 'err');
+      refreshWaSchedule();
+    },
+    [api, showToast, refreshWaSchedule]
+  );
+
+  const runWaScheduleOnce = useCallback(async () => {
+    if (typeof api.runWhatsAppScheduleOnce !== 'function') return;
+    setWaBusy(true);
+    try {
+      const r = await api.runWhatsAppScheduleOnce();
+      showToast(r.msg, r.ok ? 'ok' : 'err');
+      if (r.lastSent) setWaSched((s) => ({ ...s, lastSent: r.lastSent }));
+      refreshWaLog();
     } finally {
       setWaBusy(false);
     }
@@ -171,6 +287,55 @@ export default function SettingsPage() {
                 <strong>Holidays:</strong> saving a holiday notifies all parents with start and end dates. Routine alerts pause during holidays. Use the button below for the &quot;2 days before holidays end&quot; reopening reminder (run daily in production via your backend cron).
               </li>
             </ul>
+
+            <div className="card-title" style={{ fontSize: '1rem', marginBottom: 8 }}>
+              Scheduled WhatsApp alert (demo)
+            </div>
+            <div className="form-grid" style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', marginBottom: 12 }}>
+              <div className="form-group">
+                <label>Time (HH:MM, 24h)</label>
+                <input type="time" value={waSched.time} onChange={(e) => setWaSched((s) => ({ ...s, time: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Send to (WhatsApp number)</label>
+                <input
+                  type="tel"
+                  placeholder="e.g. 9876543210"
+                  value={waSched.to}
+                  onChange={(e) => setWaSched((s) => ({ ...s, to: e.target.value.replace(/[^0-9+]/g, '') }))}
+                />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>Message</label>
+                <textarea
+                  rows={3}
+                  value={waSched.message}
+                  onChange={(e) => setWaSched((s) => ({ ...s, message: e.target.value }))}
+                  placeholder="[School] Reminder text"
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={waSched.enabled}
+                    onChange={(e) => toggleWaSchedule(e.target.checked)}
+                  />
+                  <span>Enable schedule</span>
+                </label>
+                <Button type="button" size="sm" onClick={saveWaSchedule} disabled={waSchedSaving}>
+                  {waSchedSaving ? 'Saving…' : 'Save schedule'}
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={runWaScheduleOnce} disabled={waBusy}>
+                  Send test now
+                </Button>
+              </div>
+              {waSched.lastSent ? (
+                <p style={{ gridColumn: '1 / -1', color: 'var(--text-muted)', margin: 0 }}>
+                  Last sent: {waSched.lastSent}
+                </p>
+              ) : null}
+            </div>
 
             <div className="card-title" style={{ fontSize: '1rem', marginBottom: 8 }}>
               School holidays
@@ -249,6 +414,23 @@ export default function SettingsPage() {
             <div className="card-title" style={{ fontSize: '1rem', marginBottom: 8 }}>
               Outgoing message queue (latest)
             </div>
+            <div className="filter-bar" style={{ marginBottom: 10 }}>
+              <label className="filter-label-inline">
+                <span>Class</span>
+                <select value={waClassFilter} onChange={(e) => setWaClassFilter(e.target.value)}>
+                  <option value="">All</option>
+                  {waClassOptions.map((cls) => (
+                    <option key={cls} value={cls}>
+                      Class {cls}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 700 }}>
+                Showing {pagedWaLog.length ? (waCurrentPage - 1) * WA_PAGE_SIZE + 1 : 0}-
+                {Math.min(waCurrentPage * WA_PAGE_SIZE, filteredWaLog.length)} of {filteredWaLog.length}
+              </span>
+            </div>
             {waLogLoading && !waLog ? (
               <Spinner />
             ) : (
@@ -258,22 +440,26 @@ export default function SettingsPage() {
                     <tr>
                       <th>Time (UTC)</th>
                       <th>To</th>
+                      <th>Class</th>
                       <th>Kind</th>
                       <th>Preview</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {!waLog?.length ? (
+                    {!pagedWaLog.length ? (
                       <tr>
-                        <td colSpan={4} className="empty" style={{ padding: 16 }}>
-                          No queued messages yet. Mark attendance, post an announcement, or use the buttons above.
+                        <td colSpan={5} className="empty" style={{ padding: 16 }}>
+                          {waLog?.length
+                            ? 'No queued messages match this class filter.'
+                            : 'No queued messages yet. Mark attendance, post an announcement, or use the buttons above.'}
                         </td>
                       </tr>
                     ) : (
-                      waLog.map((row) => (
+                      pagedWaLog.map((row) => (
                         <tr key={row.Log_ID}>
                           <td style={{ whiteSpace: 'nowrap', fontSize: '0.8rem' }}>{esc(row.at)}</td>
                           <td>{esc(row.to)}</td>
+                          <td>{row.Class ? `Class ${esc(row.Class)}${row.Section ? `-${esc(row.Section)}` : ''}` : '—'}</td>
                           <td>{esc(row.kind)}</td>
                           <td style={{ maxWidth: 280, fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={row.body}>
                             {esc(row.body)}
@@ -285,6 +471,31 @@ export default function SettingsPage() {
                 </table>
               </div>
             )}
+            {filteredWaLog.length > WA_PAGE_SIZE ? (
+              <div className="btn-row" style={{ justifyContent: 'space-between', marginTop: 12 }}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setWaPage((p) => Math.max(1, p - 1))}
+                  disabled={waCurrentPage <= 1}
+                >
+                  Previous
+                </Button>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 700 }}>
+                  Page {waCurrentPage} of {waTotalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setWaPage((p) => Math.min(waTotalPages, p + 1))}
+                  disabled={waCurrentPage >= waTotalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            ) : null}
           </>
         )}
       </Card>
@@ -347,6 +558,16 @@ export default function SettingsPage() {
           </div>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmLabel={confirm?.confirmLabel}
+        danger={confirm?.danger}
+        onConfirm={confirm?.onConfirm}
+        onCancel={() => setConfirm(null)}
+      />
     </>
   );
 }

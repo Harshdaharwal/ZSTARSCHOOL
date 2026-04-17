@@ -4,11 +4,13 @@ import { Button } from '../components/common/Button.jsx';
 import { Badge } from '../components/common/Badge.jsx';
 import { SectionHeader } from '../components/common/SectionHeader.jsx';
 import { Spinner } from '../components/common/Spinner.jsx';
+import { IconClassNotices, IconRefresh, IconDocument, IconSchool, IconBell, IconCalendar, IconWarning } from '../components/common/Icons.jsx';
 import { useApi } from '../hooks/useApi.js';
 import { useAsyncResource } from '../hooks/useAsyncResource.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useToast } from '../hooks/useToast.js';
 import { esc } from '../utils/format.js';
+import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 
 function formatPosted(iso) {
   if (!iso) return '—';
@@ -48,6 +50,7 @@ export default function ClassAnnouncementsPage() {
   const [selClass, setSelClass] = useState('');
   const [selSection, setSelSection] = useState('');
   const [posting, setPosting] = useState(false);
+  const [confirm, setConfirm] = useState(null);
 
   // Pre-fill class for teacher on load
   useEffect(() => {
@@ -101,10 +104,19 @@ export default function ClassAnnouncementsPage() {
   );
 
   const remove = useCallback(
-    async (id) => {
-      const res = await api.deleteClassAnnouncement(id);
-      showToast(res.msg, res.ok ? 'ok' : 'err');
-      if (res.ok) refresh();
+    (id) => {
+      setConfirm({
+        title: 'Delete Class Notice',
+        message: 'Are you sure you want to delete this class notice? This will remove it for both staff and parents.',
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: async () => {
+          const res = await api.deleteClassAnnouncement(id);
+          showToast(res.msg, res.ok ? 'ok' : 'err');
+          if (res.ok) refresh();
+          setConfirm(null);
+        },
+      });
     },
     [api, refresh, showToast]
   );
@@ -114,65 +126,44 @@ export default function ClassAnnouncementsPage() {
   return (
     <>
       <SectionHeader
-        title="📢 Class Announcements"
+        title="Class Announcements"
         actions={
           <Button variant="ghost" size="sm" onClick={refresh}>
-            🔄 Refresh
+            <IconRefresh size={14} /> Refresh
           </Button>
         }
       />
 
       <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 20, fontWeight: 600 }}>
-        {isAdmin
-          ? 'Post a class-specific notice. Parents of students in that class will be notified via WhatsApp.'
-          : `Post notices for your class (${teacherProfile ? `Class ${teacherProfile.Class_Assigned}-${teacherProfile.Section_Assigned}` : '…'}). Parents of your students will be notified via WhatsApp.`}
+        Post a class-specific notice. Parents of students in that class will be notified via WhatsApp.
       </p>
 
       {/* ── Post Form ── */}
       <Card style={{ marginBottom: 24 }}>
-        <CardTitle>📝 New Class Announcement</CardTitle>
+        <CardTitle><IconDocument size={16} strokeWidth={2} style={{ marginRight: 6, verticalAlign: 'middle' }} />New Class Announcement</CardTitle>
 
-        {/* Class selector (admin only; teacher sees locked badge) */}
-        {isAdmin ? (
-          <div className="form-group" style={{ marginBottom: 16, maxWidth: 320 }}>
-            <label style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: 6, display: 'block' }}>
-              Target Class *
-            </label>
-            <select
-              value={selClass && selSection ? `${selClass}|${selSection}` : ''}
-              onChange={handleClassChange}
-              style={{ width: '100%' }}
-            >
-              <option value="">— Select class —</option>
-              {classOptions.map((c) => (
-                <option key={`${c.Class}|${c.Section}`} value={`${c.Class}|${c.Section}`}>
-                  Class {c.Class}-{c.Section}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <div style={{ marginBottom: 16 }}>
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '5px 14px',
-                borderRadius: 20,
-                background: 'rgba(99,102,241,0.12)',
-                color: '#6366f1',
-                fontWeight: 700,
-                fontSize: '0.85rem',
-              }}
-            >
-              🏛️ Class {selClass}-{selSection}
-              <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-                (your assigned class)
-              </span>
-            </span>
-          </div>
-        )}
+        <div className="form-group" style={{ marginBottom: 16, maxWidth: 320 }}>
+          <label style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: 6, display: 'block' }}>
+            Target Class *
+          </label>
+          <select
+            value={selClass && selSection ? `${selClass}|${selSection}` : ''}
+            onChange={handleClassChange}
+            style={{ width: '100%' }}
+          >
+            <option value="">— Select class —</option>
+            {classOptions.map((c) => (
+              <option key={`${c.Class}|${c.Section}`} value={`${c.Class}|${c.Section}`}>
+                Class {c.Class}-{c.Section}
+              </option>
+            ))}
+          </select>
+          {!isAdmin && teacherProfile && (
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
+              (Default: Your assigned class {teacherProfile.Class_Assigned}-{teacherProfile.Section_Assigned})
+            </p>
+          )}
+        </div>
 
         <form className="form-grid" onSubmit={submit}>
           <div className="form-group full">
@@ -187,12 +178,12 @@ export default function ClassAnnouncementsPage() {
             <label>Priority</label>
             <select name="priority" defaultValue="Normal">
               <option value="Normal">Normal</option>
-              <option value="High">⚠️ High</option>
+              <option value="High">High</option>
             </select>
           </div>
           <div className="form-group full btn-row">
             <Button type="submit" disabled={posting || (!selClass && !selSection)}>
-              {posting ? 'Posting…' : '📢 Post & Notify Parents'}
+              {posting ? 'Posting…' : <><IconBell size={15} style={{ marginRight: 4 }} />Post &amp; Notify Parents</>}
             </Button>
           </div>
         </form>
@@ -201,7 +192,7 @@ export default function ClassAnnouncementsPage() {
       {/* ── Announcements List ── */}
       <Card>
         <SectionHeader
-          title={`Posted Notices${isAdmin ? ' (all classes)' : ` — Class ${selClass}-${selSection}`}`}
+          title="Posted Notices"
           actions={<Button size="sm" variant="ghost" onClick={refresh}>Refresh</Button>}
         />
 
@@ -233,9 +224,12 @@ export default function ClassAnnouncementsPage() {
                           fontWeight: 700,
                           background: 'rgba(16,185,129,0.12)',
                           color: '#059669',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
                         }}
                       >
-                        🏫 Class {esc(a.Class)}-{esc(a.Section)}
+                        <IconSchool size={11} strokeWidth={2} />Class {esc(a.Class)}-{esc(a.Section)}
                       </span>
                       {a.Teacher_Name && (
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -248,8 +242,8 @@ export default function ClassAnnouncementsPage() {
                     <p style={{ whiteSpace: 'pre-wrap', color: 'var(--text)', marginBottom: 8, fontSize: '0.9rem' }}>
                       {esc(a.Body)}
                     </p>
-                    <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                      📅 {formatPosted(a.Posted_At)}
+                    <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <IconCalendar size={11} strokeWidth={2} />{formatPosted(a.Posted_At)}
                     </p>
                   </div>
 
@@ -270,6 +264,16 @@ export default function ClassAnnouncementsPage() {
           )}
         </div>
       </Card>
+
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmLabel={confirm?.confirmLabel}
+        danger={confirm?.danger}
+        onConfirm={confirm?.onConfirm}
+        onCancel={() => setConfirm(null)}
+      />
     </>
   );
 }

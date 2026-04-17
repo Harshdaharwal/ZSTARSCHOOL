@@ -4,17 +4,22 @@ import { Card, ChartCard } from '../components/common/Card.jsx';
 import { StatCard } from '../components/common/StatCard.jsx';
 import { FilterTabs } from '../components/common/FilterTabs.jsx';
 import { Spinner } from '../components/common/Spinner.jsx';
+import {
+  IconDashboard, IconStudents, IconAttendanceStudents, IconFees,
+  IconRefresh, IconTimetables, IconTrendUp, IconChartBar, IconCheck,
+  IconUsers, IconMoney, IconClock,
+} from '../components/common/Icons.jsx';
 import { useApi } from '../hooks/useApi.js';
 import { useAsyncResource } from '../hooks/useAsyncResource.js';
 import { useAuth } from '../hooks/useAuth.js';
-import { useDashboardStatItems } from '../hooks/useDashboardStats.js';
+import { useDashboardStatItems } from '../hooks/useDashboardStats.jsx';
 import { esc } from '../utils/format.js';
 
 const ALL_DASH_TABS = [
-  { id: 'overview', label: '📊 Overview' },
-  { id: 'students', label: '🎒 Students Analytics' },
-  { id: 'attendance', label: '✅ Attendance Trends' },
-  { id: 'fees', label: '💰 Fee Collection', adminOnly: true },
+  { id: 'overview', label: 'Overview', Icon: IconDashboard },
+  { id: 'students', label: 'Students Analytics', Icon: IconStudents },
+  { id: 'attendance', label: 'Attendance Trends', Icon: IconAttendanceStudents },
+  { id: 'fees', label: 'Fee Collection', Icon: IconFees, adminOnly: true },
 ];
 
 
@@ -136,16 +141,19 @@ export default function DashboardPage() {
             <div className="dash-charts">
               <ChartCard
                 title={
-                  overviewClass
-                    ? `📈 Attendance trend — Class ${esc(overviewClass)} (last 7 days)`
-                    : '📈 Overall attendance trend (last 7 days)'
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <IconTrendUp size={15} strokeWidth={2} />
+                    {overviewClass
+                      ? `Attendance trend — Class ${esc(overviewClass)} (last 7 days)`
+                      : 'Overall attendance trend (last 7 days)'}
+                  </span>
                 }
               >
                 <div className="chart-container">
                   <Line data={lineData} options={chartOptions} />
                 </div>
               </ChartCard>
-              <ChartCard title="🎒 Students Enrolled per Class">
+              <ChartCard title={<span style={{ display: 'flex', alignItems: 'center', gap: 7 }}><IconStudents size={15} strokeWidth={2} />Students Enrolled per Class</span>}>
                 <div className="chart-container">
                   <Bar
                     data={barClassData}
@@ -155,8 +163,8 @@ export default function DashboardPage() {
               </ChartCard>
             </div>
             <div className="dash-side-panel">
-              <div className="card-title" style={{ borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
-                🧑‍🎓 Detailed Attendance
+              <div className="card-title" style={{ borderBottom: 'none', marginBottom: 0, paddingBottom: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
+                <IconStudents size={16} strokeWidth={2} />Detailed Attendance
               </div>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '4px 0 16px' }}>
                 Sample students per class (mock data)
@@ -194,8 +202,8 @@ export default function DashboardPage() {
       {tab === 'fees' && !isTeacher && <FeesPanel api={api} />}
 
       <div style={{ marginTop: 16 }}>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => refresh()}>
-          🔄 Refresh dashboard
+        <button type="button" className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }} onClick={() => refresh()}>
+          <IconRefresh size={14} /> Refresh dashboard
         </button>
       </div>
     </>
@@ -221,7 +229,7 @@ function TeacherTodaySchedule({ api }) {
 
   return (
     <Card style={{ marginBottom: 24 }}>
-      <div className="card-title">🗓️ Today&apos;s timetable ({esc(weekday)})</div>
+      <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconTimetables size={17} strokeWidth={2} /> Today&apos;s timetable ({esc(weekday)})</div>
       <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 12 }}>
         Your assigned class sections — periods for this weekday (India calendar).
       </p>
@@ -326,8 +334,8 @@ function StudentsAnalyticsPanel({ api }) {
         </p>
       </div>
       <Card>
-        <div className="card-title">
-          🎒 Student distribution {filterClass ? `(class ${esc(filterClass)})` : '(class–section)'}
+        <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <IconStudents size={16} strokeWidth={2} />Student distribution {filterClass ? `(class ${esc(filterClass)})` : '(class–section)'}
         </div>
         <div className="chart-container">
           {Object.keys(stats?.byClass || {}).length === 0 ? (
@@ -341,14 +349,15 @@ function StudentsAnalyticsPanel({ api }) {
       </Card>
       <div className="chart-row">
         <Card>
-          <div className="card-title">👥 Gender distribution</div>
+          <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}><IconUsers size={16} strokeWidth={2} />Gender distribution</div>
           <div className="chart-container" style={{ height: 250 }}>
             <Doughnut data={doughnutData} options={{ responsive: true, maintainAspectRatio: false }} />
           </div>
         </Card>
         <Card>
-          <div className="card-title">
-            {filterClass ? `📊 Sections in class ${esc(filterClass)}` : '📊 Class-wise strength'}
+          <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <IconChartBar size={16} strokeWidth={2} />
+            {filterClass ? `Sections in class ${esc(filterClass)}` : 'Class-wise strength'}
           </div>
           <div className="chart-container" style={{ height: 250 }}>
             <Bar data={strengthData} options={{ ...chartOptions, plugins: { legend: { display: false } } }} />
@@ -425,15 +434,16 @@ function AttendanceTrendsPanel({ chartData }) {
         </p>
       </div>
       <Card>
-        <div className="card-title">
-          {cls ? `✅ Daily trend — class ${esc(cls)}` : '✅ Daily trend — all classes'}
+        <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <IconCheck size={16} strokeWidth={2} />
+          {cls ? `Daily trend — class ${esc(cls)}` : 'Daily trend — all classes'}
         </div>
         <div className="chart-container">
           <Line data={lineData} options={chartOptions} />
         </div>
       </Card>
       <Card style={{ marginTop: 24 }}>
-        <div className="card-title">📊 Class-wise attendance (present vs absent, last 7 days)</div>
+        <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}><IconChartBar size={16} strokeWidth={2} />Class-wise attendance (present vs absent, last 7 days)</div>
         <div className="chart-container">
           {classKeys.length === 0 ? (
             <p className="empty" style={{ padding: 24 }}>No attendance breakdown by class.</p>
@@ -558,7 +568,7 @@ function FeesPanel({ api }) {
         </p>
       </div>
       <div className="chart-row">
-        <ChartCard title="💰 Paid revenue by class">
+        <ChartCard title={<span style={{ display: 'flex', alignItems: 'center', gap: 7 }}><IconMoney size={15} strokeWidth={2} />Paid revenue by class</span>}>
           <div className="chart-container">
             <Bar
               data={revenueByClassBar}
@@ -566,7 +576,7 @@ function FeesPanel({ api }) {
             />
           </div>
         </ChartCard>
-        <ChartCard title="⏳ Pending fees by class">
+        <ChartCard title={<span style={{ display: 'flex', alignItems: 'center', gap: 7 }}><IconClock size={15} strokeWidth={2} />Pending fees by class</span>}>
           <div className="chart-container">
             <Bar
               data={pendingByClassBar}
@@ -576,9 +586,9 @@ function FeesPanel({ api }) {
         </ChartCard>
       </div>
       <Card style={{ marginTop: 24 }}>
-        <div className="card-title">
-          📈 Collected vs pending by month
-          {feeClass ? ` (class ${esc(feeClass)})` : ' (all classes)'}
+        <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <IconTrendUp size={16} strokeWidth={2} />
+          Collected vs pending by month{feeClass ? ` (class ${esc(feeClass)})` : ' (all classes)'}
         </div>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 12 }}>
           Green: fees collected, grouped by paid month (mm/yyyy). Orange: outstanding fees, grouped by due month

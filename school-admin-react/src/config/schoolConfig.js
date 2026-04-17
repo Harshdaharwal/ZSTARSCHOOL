@@ -1,11 +1,11 @@
 /** Single-school profile — India. Adjust name / year when going live. */
 
-export const SCHOOL_NAME = 'Springdale Public School';
-export const SCHOOL_NAME_SHORT = 'Springdale';
-export const SCHOOL_TAGLINE = 'Bhopal, Madhya Pradesh · India';
-export const ACADEMIC_YEAR = '2024-25';
+export const SCHOOL_NAME = 'Edu Manage';
+export const SCHOOL_NAME_SHORT = 'Edu Manage';
+export const SCHOOL_TAGLINE = 'Jaipur, Rajasthan · India';
+export const ACADEMIC_YEAR = '2026-27';
 /** Dropdown options for student academic year filters and registration. */
-export const ACADEMIC_YEAR_OPTIONS = ['2022-23', '2023-24', '2024-25', '2025-26', '2026-27'];
+export const ACADEMIC_YEAR_OPTIONS = ['2025-26', '2026-27', '2027-28', '2028-29', '2029-30', '2030-31'];
 export const ACADEMIC_TERM = 'Term II';
 export const LOCALE_DEFAULT = 'en-IN';
 export const COUNTRY_CODE = 'IN';

@@ -2,13 +2,14 @@ import { Fragment, useCallback, useState } from 'react';
 import { Card, CardTitle } from '../components/common/Card.jsx';
 import { Button } from '../components/common/Button.jsx';
 import { FilterTabs } from '../components/common/FilterTabs.jsx';
+import { IconAttendanceStudents, IconEdit } from '../components/common/Icons.jsx';
 import { useApi } from '../hooks/useApi.js';
 import { useToast } from '../hooks/useToast.js';
 import { esc, formatDateIN } from '../utils/format.js';
 
 const TABS = [
-  { id: 'mark', label: '✅ Mark attendance' },
-  { id: 'edit', label: '✏️ Edit attendance' },
+  { id: 'mark', label: 'Mark Attendance', Icon: IconAttendanceStudents },
+  { id: 'edit', label: 'Edit Attendance', Icon: IconEdit },
 ];
 
 export default function AttendanceStudentsPage() {

@@ -5,14 +5,15 @@ import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 import { FilterTabs } from '../components/common/FilterTabs.jsx';
 import { SectionHeader } from '../components/common/SectionHeader.jsx';
 import { Spinner } from '../components/common/Spinner.jsx';
+import { IconClasses, IconTimetables, IconRefresh, IconSchool } from '../components/common/Icons.jsx';
 import { useApi } from '../hooks/useApi.js';
 import { useAsyncResource } from '../hooks/useAsyncResource.js';
 import { useToast } from '../hooks/useToast.js';
 import { esc } from '../utils/format.js';
 
 const TABS = [
-  { id: 'list', label: '📋 Class List' },
-  { id: 'schedule', label: '🗓️ Schedule' },
+  { id: 'list', label: 'Class List', Icon: IconClasses },
+  { id: 'schedule', label: 'Schedule', Icon: IconTimetables },
 ];
 
 export default function ClassesPage() {
@@ -103,7 +104,7 @@ export default function ClassesPage() {
       {tab === 'list' && (
         <>
           <Card>
-            <CardTitle>🏛️ Add Class</CardTitle>
+            <CardTitle><IconSchool size={16} strokeWidth={2} style={{ marginRight: 6, verticalAlign: 'middle' }} />Add Class</CardTitle>
             <form className="form-grid" onSubmit={addClass}>
               <div className="form-group">
                 <label>Class *</label>
@@ -136,7 +137,7 @@ export default function ClassesPage() {
             </form>
           </Card>
           <Card>
-            <SectionHeader title="📋 All Classes" actions={<Button onClick={() => refresh()}>🔄</Button>} />
+            <SectionHeader title="All Classes" actions={<Button onClick={() => refresh()} size="sm" variant="ghost"><IconRefresh size={14} /></Button>} />
             <div className="tbl-wrap">
               <table>
                 <thead>
