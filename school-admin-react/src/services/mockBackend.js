@@ -170,32 +170,109 @@ export function seedMockDatabase() {
         Status: 'Active',
         Academic_Year: ACADEMIC_YEAR,
       });
-      for (let d = 0; d < 7; d++) {
+      // 30 days of attendance history
+      for (let d = 0; d < 30; d++) {
         const date = new Date();
         date.setDate(date.getDate() - d);
+        // skip Sundays (0) and Saturdays (6)
+        if (date.getDay() === 0 || date.getDay() === 6) continue;
+        const rand = Math.random();
         DB.att_stu.push({
           Date: date.toLocaleDateString('en-IN'),
           Student_ID: stuId,
           Name: name,
           Class: String(c),
           Section: 'A',
-          Status: Math.random() < 0.85 ? 'Present' : 'Absent',
+          Status: rand < 0.80 ? 'Present' : rand < 0.92 ? 'Absent' : 'Late',
           Remarks: '',
         });
       }
-      if (Math.random() > 0.4) {
-        const paid = Math.random() > 0.3;
+
+      // Helper for DD/MM/YYYY
+      const fmtD = (dt) => {
+        const dd = String(dt.getDate()).padStart(2, '0');
+        const mm = String(dt.getMonth() + 1).padStart(2, '0');
+        return `${dd}/${mm}/${dt.getFullYear()}`;
+      };
+
+      // Fee amount by class tier
+      const monthlyAmt = c <= 3 ? 1200 : c <= 6 ? 1400 : c <= 9 ? 1600 : 2000;
+
+      // Monthly fees: last 6 months (Nov 2025 – Apr 2026)
+      const today = new Date(2026, 3, 17); // Apr 17, 2026
+      for (let m = 5; m >= 0; m--) {
+        const feeMonth = new Date(today.getFullYear(), today.getMonth() - m, 1);
+        const dueDate = fmtD(feeMonth); // 1st of the month
+        const isCurrent = m === 0;
+        const isPaid = isCurrent ? Math.random() > 0.45 : Math.random() > 0.12;
+        const paidDate = isPaid ? fmtD(new Date(feeMonth.getFullYear(), feeMonth.getMonth(), 5 + Math.floor(Math.random() * 10))) : '';
+        const rcpNum = isPaid ? `RCP${c}${s}${String(6 - m).padStart(2, '0')}` : '';
         DB.fees.push({
-          Fee_ID: `FEE_${c}${s}`,
+          Fee_ID: `FEE_M${c}_${s}_${6 - m}`,
           Student_ID: stuId,
           Student_Name: name,
           Class: String(c),
           Fee_Type: 'Monthly Fee',
-          Amount: 1500,
-          Due_Date: '01/10/2023',
-          Paid_Date: paid ? '05/10/2023' : '',
-          Status: paid ? 'Paid' : 'Pending',
-          Receipt_No: paid ? 'RCP123' : '',
+          Amount: monthlyAmt,
+          Due_Date: dueDate,
+          Paid_Date: paidDate,
+          Status: isPaid ? 'Paid' : 'Pending',
+          Receipt_No: rcpNum,
+          Remarks: '',
+        });
+      }
+
+      // Annual fee (April 2026)
+      {
+        const annualAmt = c <= 3 ? 3000 : c <= 6 ? 4000 : c <= 9 ? 5000 : 6000;
+        const annPaid = Math.random() > 0.35;
+        DB.fees.push({
+          Fee_ID: `FEE_ANN_${c}_${s}`,
+          Student_ID: stuId,
+          Student_Name: name,
+          Class: String(c),
+          Fee_Type: 'Annual Fee',
+          Amount: annualAmt,
+          Due_Date: '01/04/2026',
+          Paid_Date: annPaid ? fmtD(new Date(2026, 3, 3 + Math.floor(Math.random() * 12))) : '',
+          Status: annPaid ? 'Paid' : 'Pending',
+          Receipt_No: annPaid ? `RCP_ANN_${c}${s}` : '',
+          Remarks: 'Academic Year 2026-27',
+        });
+      }
+
+      // Sports fee (all classes)
+      {
+        const sportsPaid = Math.random() > 0.3;
+        DB.fees.push({
+          Fee_ID: `FEE_SPT_${c}_${s}`,
+          Student_ID: stuId,
+          Student_Name: name,
+          Class: String(c),
+          Fee_Type: 'Sports Fee',
+          Amount: 500,
+          Due_Date: '15/04/2026',
+          Paid_Date: sportsPaid ? fmtD(new Date(2026, 3, 15 + Math.floor(Math.random() * 5))) : '',
+          Status: sportsPaid ? 'Paid' : 'Pending',
+          Receipt_No: sportsPaid ? `RCP_SPT_${c}${s}` : '',
+          Remarks: '',
+        });
+      }
+
+      // Lab fee for Class 6 and above
+      if (c >= 6) {
+        const labPaid = Math.random() > 0.25;
+        DB.fees.push({
+          Fee_ID: `FEE_LAB_${c}_${s}`,
+          Student_ID: stuId,
+          Student_Name: name,
+          Class: String(c),
+          Fee_Type: 'Lab Fee',
+          Amount: 800,
+          Due_Date: '01/04/2026',
+          Paid_Date: labPaid ? fmtD(new Date(2026, 3, 2 + Math.floor(Math.random() * 14))) : '',
+          Status: labPaid ? 'Paid' : 'Pending',
+          Receipt_No: labPaid ? `RCP_LAB_${c}${s}` : '',
           Remarks: '',
         });
       }
@@ -234,6 +311,31 @@ export function seedMockDatabase() {
   TEACHERS.forEach((t) => {
     DB.teachers.push({ ...t, Status: 'Active', Password: '' });
   });
+
+  // Seed 30 days of teacher attendance
+  if (!DB.att_tch.length) {
+    const inTimes = ['08:45', '08:50', '08:55', '09:00', '09:05', '09:10'];
+    const outTimes = ['15:00', '15:05', '15:10', '15:15', '15:20', '15:30'];
+    DB.teachers.forEach((t) => {
+      for (let d = 0; d < 30; d++) {
+        const date = new Date();
+        date.setDate(date.getDate() - d);
+        if (date.getDay() === 0 || date.getDay() === 6) continue;
+        const rand = Math.random();
+        const status = rand < 0.80 ? 'Present' : rand < 0.90 ? 'Absent' : rand < 0.96 ? 'Late' : 'Leave';
+        DB.att_tch.push({
+          Date: date.toLocaleDateString('en-IN'),
+          Teacher_ID: t.Teacher_ID,
+          Name: t.Name,
+          Status: status,
+          In_Time: status === 'Present' ? inTimes[Math.floor(Math.random() * inTimes.length)] : status === 'Late' ? '09:20' : '',
+          Out_Time: status === 'Present' || status === 'Late' ? outTimes[Math.floor(Math.random() * outTimes.length)] : '',
+          Remarks: status === 'Leave' ? 'Medical leave' : '',
+        });
+      }
+    });
+  }
+
   DB.exams.push(
     { Exam_ID: 'EXM_101', Exam_Name: 'Mid Term', Class: '10', Subject: 'Math', Exam_Date: '15/10/2023', Max_Marks: 100, Pass_Marks: 33 },
     { Exam_ID: 'EXM_102', Exam_Name: 'Mid Term', Class: '10', Subject: 'Science', Exam_Date: '16/10/2023', Max_Marks: 100, Pass_Marks: 33 }
@@ -323,6 +425,20 @@ export function seedMockDatabase() {
       Posted_At: new Date().toISOString(),
       Priority: 'Normal',
     });
+  }
+
+  // Seed class fee settings for all classes
+  if (!DB.class_fee_settings.length) {
+    for (let c = 1; c <= 12; c++) {
+      const amt = c <= 3 ? 1200 : c <= 6 ? 1400 : c <= 9 ? 1600 : 2000;
+      DB.class_fee_settings.push({
+        Class: String(c),
+        Amount: amt,
+        Fee_Type: 'Monthly Fee',
+        Note: `Standard monthly tuition fee for Class ${c}`,
+        Updated_At: new Date().toISOString(),
+      });
+    }
   }
 
   // Seed salary records

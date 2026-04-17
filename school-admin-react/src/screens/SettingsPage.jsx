@@ -643,6 +643,38 @@ export default function SettingsPage() {
         </Button>
       </Card>
 
+      {!isFirebaseConfigured() && (
+        <Card style={{ marginTop: 16, border: '2px solid var(--danger, #ef4444)' }}>
+          <CardTitle>Reset Demo / Local Data</CardTitle>
+          <p style={{ marginBottom: 8 }}>
+            Clears all locally stored data and reloads the app with fresh, comprehensive seed data — including{' '}
+            <strong>30 days of attendance</strong>, <strong>multiple months of fees</strong> (Monthly, Annual, Sports,
+            Lab) for all 120 students across Classes 1–12, and <strong>teacher attendance records</strong>.
+          </p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 14 }}>
+            ⚠️ This will erase any data you added manually during this session.
+          </p>
+          <Button
+            type="button"
+            variant="danger"
+            onClick={() =>
+              setConfirm({
+                title: 'Reset demo data?',
+                message:
+                  'This will erase all locally stored data and reload the app with fresh seed data. Any manual entries will be lost.',
+                confirmLabel: 'Yes, reset',
+                danger: true,
+                onConfirm: () => {
+                  localStorage.removeItem('edumanage_local_db_v2');
+                  window.location.reload();
+                },
+              })
+            }
+          >
+            Reset &amp; Reseed Local Data
+          </Button>
+        </Card>
+      )}
 
       <Card style={{ marginTop: 16 }}>
         <div className="sec-hdr">
