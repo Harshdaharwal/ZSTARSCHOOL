@@ -1531,11 +1531,7 @@ export function createMockApi(getActor) {
       await delay();
       const id = uid('FEE');
       const rcpt = d.status === 'Paid' ? 'RCP' + Date.now().toString().slice(-7) : '';
-<<<<<<< Updated upstream
       const feeRecord = {
-=======
-      const row = {
->>>>>>> Stashed changes
         Fee_ID: id,
         Student_ID: d.studentId,
         Student_Name: d.studentName,
@@ -1548,7 +1544,6 @@ export function createMockApi(getActor) {
         Receipt_No: rcpt,
         Remarks: d.remarks || '',
       };
-<<<<<<< Updated upstream
       DB.fees.push(feeRecord);
       saveLocalDbFromMemory();
 
@@ -1580,19 +1575,18 @@ export function createMockApi(getActor) {
               `Please pay at the school fee counter.`;
           }
           PN.queueWhatsApp(DB, audit, { to: phone, body, kind: 'fee_record', refId: id });
-=======
-      DB.fees.push(row);
-      saveLocalDbFromMemory();
+        }
+      }
 
+      // Sync to Firestore if available
       const fb = firebaseReady();
       if (fb) {
         try {
-          await setDoc(doc(fb.db, 'fees', id), row, { merge: true });
-          return { ok: true, msg: 'Fee record saved! âœ… Saved to Firestore.', id, receipt: rcpt };
+          await setDoc(doc(fb.db, 'fees', id), feeRecord, { merge: true });
+          return { ok: true, msg: 'Fee record saved! Saved to Firestore.', id, receipt: rcpt };
         } catch (e) {
           console.error('[Firestore Sync Error] fees', e);
           return { ok: true, msg: `Fee saved locally (ID: ${id}), but Firestore sync failed: ${e?.message || e}`, id, receipt: rcpt };
->>>>>>> Stashed changes
         }
       }
 
