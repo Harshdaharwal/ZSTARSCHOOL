@@ -962,6 +962,11 @@ export function createMockApi(getActor) {
       }
       return { ok: true, msg: 'Status updated: ' + status };
     },
+    async getStudentById(studentId) {
+      await delay();
+      const st = DB.students.find((s) => String(s.Student_ID).toLowerCase() === String(studentId).toLowerCase());
+      return st || null;
+    },
     async getStudentsByClass(cls, section) {
       await delay();
       await tryMergeCollectionIntoDb('students', (id, data) => {
@@ -974,6 +979,9 @@ export function createMockApi(getActor) {
     },
     async addTeacher(d) {
       await delay();
+      const phone = String(d.phone || '').trim();
+      const dupPhone = DB.teachers.find((t) => String(t.Phone || '').trim() === phone);
+      if (dupPhone) return { ok: false, msg: `Phone number ${phone} is already registered to ${dupPhone.Name}. Each teacher must have a unique mobile number.` };
       const id = uid('TCH');
       const email = String(d.email || '').trim();
       const emailLc = email.toLowerCase();
@@ -1079,6 +1087,9 @@ export function createMockApi(getActor) {
       await delay();
       const t = DB.teachers.find((x) => x.Teacher_ID === id);
       if (!t) return { ok: false, msg: 'Teacher not found!' };
+      const phone = String(d.phone || '').trim();
+      const dupPhone = DB.teachers.find((x) => String(x.Phone || '').trim() === phone && x.Teacher_ID !== id);
+      if (dupPhone) return { ok: false, msg: `Phone number ${phone} is already registered to ${dupPhone.Name}. Each teacher must have a unique mobile number.` };
       const email = String(d.email || '').trim();
       const emailLc = email.toLowerCase();
       const updates = {
@@ -1398,7 +1409,7 @@ export function createMockApi(getActor) {
       await delay();
       const id = uid('FEE');
       const rcpt = d.status === 'Paid' ? 'RCP' + Date.now().toString().slice(-7) : '';
-      DB.fees.push({
+      const feeRecord = {
         Fee_ID: id,
         Student_ID: d.studentId,
         Student_Name: d.studentName,
@@ -1410,7 +1421,41 @@ export function createMockApi(getActor) {
         Status: d.status || 'Pending',
         Receipt_No: rcpt,
         Remarks: d.remarks || '',
-      });
+      };
+      DB.fees.push(feeRecord);
+      saveLocalDbFromMemory();
+
+      // Send personalized WhatsApp to parent based on Student_ID data
+      const st = DB.students.find((s) => String(s.Student_ID) === String(d.studentId));
+      if (st) {
+        const phone = PN.parentPhone(st);
+        if (phone) {
+          const amt = PN.formatRupeeIN(feeRecord.Amount);
+          let body;
+          if (feeRecord.Status === 'Paid') {
+            body =
+              `[${SCHOOL_NAME}] Fee Receipt\n` +
+              `Student: ${st.Name} (ID: ${st.Student_ID})\n` +
+              `Class: ${st.Class}-${st.Section}\n` +
+              `Fee Type: ${feeRecord.Fee_Type}\n` +
+              `Amount Paid: ${amt}\n` +
+              `Receipt No: ${rcpt}\n` +
+              `Date: ${feeRecord.Paid_Date || feeRecord.Due_Date}\n` +
+              `Thank you for the payment!`;
+          } else {
+            body =
+              `[${SCHOOL_NAME}] Fee Due Notice\n` +
+              `Student: ${st.Name} (ID: ${st.Student_ID})\n` +
+              `Class: ${st.Class}-${st.Section}\n` +
+              `Fee Type: ${feeRecord.Fee_Type}\n` +
+              `Amount Due: ${amt}\n` +
+              `Due Date: ${feeRecord.Due_Date}\n` +
+              `Please pay at the school fee counter.`;
+          }
+          PN.queueWhatsApp(DB, audit, { to: phone, body, kind: 'fee_record', refId: id });
+        }
+      }
+
       return { ok: true, msg: 'Fee record saved!', id, receipt: rcpt };
     },
     async deleteFeeRecord(feeId) {
@@ -1420,6 +1465,67 @@ export function createMockApi(getActor) {
       DB.fees.splice(i, 1);
       audit('fee_delete', { feeId });
       return { ok: true, msg: 'Fee record deleted!' };
+    },
+    async markFeePaid(feeId) {
+      await delay();
+      const fee = DB.fees.find((f) => f.Fee_ID === feeId);
+      if (!fee) return { ok: false, msg: 'Fee record not found.' };
+      if (fee.Status === 'Paid') return { ok: false, msg: 'Fee is already marked as paid.' };
+      const today = new Date();
+      const dd = String(today.getDate()).padStart(2, '0');
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const paidDate = `${dd}/${mm}/${today.getFullYear()}`;
+      const rcpt = 'RCP' + Date.now().toString().slice(-7);
+      fee.Status = 'Paid';
+      fee.Paid_Date = paidDate;
+      fee.Receipt_No = rcpt;
+      saveLocalDbFromMemory();
+      audit('fee_paid', { feeId, studentId: fee.Student_ID, amount: fee.Amount });
+
+      // Send personalized WhatsApp receipt to parent
+      const st = DB.students.find((s) => String(s.Student_ID) === String(fee.Student_ID));
+      let waMsg = '';
+      if (st) {
+        const phone = PN.parentPhone(st);
+        if (phone) {
+          const amt = PN.formatRupeeIN(fee.Amount);
+          const body =
+            `[${SCHOOL_NAME}] Fee Payment Received ✓\n` +
+            `Student: ${st.Name} (ID: ${st.Student_ID})\n` +
+            `Class: ${st.Class}-${st.Section}\n` +
+            `Father: ${st.Father_Name || '—'}\n` +
+            `Fee Type: ${fee.Fee_Type}\n` +
+            `Amount Paid: ${amt}\n` +
+            `Receipt No: ${rcpt}\n` +
+            `Date: ${paidDate}\n` +
+            `Thank you! Your payment has been recorded successfully.`;
+          PN.queueWhatsApp(DB, audit, { to: phone, body, kind: 'fee_paid', refId: feeId });
+          waMsg = ` WhatsApp receipt sent to ${phone}.`;
+        }
+      }
+      return { ok: true, msg: `Fee marked as paid. Receipt: ${rcpt}.${waMsg}`, receipt: rcpt, paidDate };
+    },
+    async sendFeeReminder(feeId) {
+      await delay();
+      const fee = DB.fees.find((f) => f.Fee_ID === feeId);
+      if (!fee) return { ok: false, msg: 'Fee record not found.' };
+      // Look up student by Student_ID to get their real data
+      const st = DB.students.find((s) => String(s.Student_ID) === String(fee.Student_ID));
+      if (!st) return { ok: false, msg: `Student ${fee.Student_ID} not found in database.` };
+      const phone = PN.parentPhone(st);
+      if (!phone) return { ok: false, msg: `No phone number on file for ${st.Name}.` };
+      const amt = PN.formatRupeeIN(fee.Amount);
+      const body =
+        `[${SCHOOL_NAME}] Fee Reminder\n` +
+        `Student: ${st.Name} (ID: ${st.Student_ID})\n` +
+        `Class: ${st.Class}-${st.Section}\n` +
+        `Father: ${st.Father_Name || '—'}\n` +
+        `Fee Type: ${fee.Fee_Type}\n` +
+        `Amount Due: ${amt}\n` +
+        `Due Date: ${fee.Due_Date || '—'}\n` +
+        `Please clear the dues at the school fee counter. For queries, contact the office.`;
+      PN.queueWhatsApp(DB, audit, { to: phone, body, kind: 'fee_reminder', refId: feeId });
+      return { ok: true, msg: `Reminder sent to ${phone} for ${st.Name}.` };
     },
     async addExam(d) {
       await delay();

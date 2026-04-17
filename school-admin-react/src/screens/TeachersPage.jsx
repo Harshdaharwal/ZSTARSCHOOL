@@ -247,7 +247,14 @@ export default function TeachersPage() {
           </div>
           <div className="form-group">
             <label>Phone *</label>
-            <input name="phone" required maxLength={10} />
+            <input
+              name="phone"
+              required
+              maxLength={10}
+              pattern="\d{10}"
+              title="Enter a 10-digit mobile number"
+              placeholder="10-digit number"
+            />
           </div>
           <div className="form-group">
             <label>Email</label>
@@ -436,6 +443,19 @@ export default function TeachersPage() {
               <PhotoPicker value={editPhoto} onChange={setEditPhoto} />
             </div>
 
+            <div className="form-group full">
+              <label>Teacher ID</label>
+              <input
+                value={edit.Teacher_ID}
+                readOnly
+                style={{ background: 'var(--input-disabled-bg, #f3f4f6)', cursor: 'not-allowed', color: 'var(--text-muted)' }}
+                title="Teacher ID cannot be changed"
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Teacher ID is auto-assigned and cannot be edited.
+              </span>
+            </div>
+
             <div className="form-group">
               <label>Name</label>
               <input name="name" defaultValue={edit.Name} />
@@ -446,7 +466,14 @@ export default function TeachersPage() {
             </div>
             <div className="form-group">
               <label>Phone</label>
-              <input name="phone" defaultValue={edit.Phone} />
+              <input
+                name="phone"
+                defaultValue={edit.Phone}
+                maxLength={10}
+                pattern="\d{10}"
+                title="Enter a 10-digit mobile number"
+                placeholder="10-digit number"
+              />
             </div>
             <div className="form-group">
               <label>Email</label>
