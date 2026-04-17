@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardTitle } from '../components/common/Card.jsx';
 import { Button } from '../components/common/Button.jsx';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
+import { Modal } from '../components/common/Modal.jsx';
 import { SectionHeader } from '../components/common/SectionHeader.jsx';
 import { Spinner } from '../components/common/Spinner.jsx';
 import { PaginationBar } from '../components/common/PaginationBar.jsx';
@@ -12,6 +13,22 @@ import { useToast } from '../hooks/useToast.js';
 import { esc, formatDateIN } from '../utils/format.js';
 
 const PAGE_SIZE = 15;
+const FEE_TYPE_OPTIONS = ['Monthly Fee', 'Annual Fee', 'Sports Fee', 'Lab Fee', 'Exam Fee', 'Other'];
+
+function isPresetFeeType(type) {
+  return FEE_TYPE_OPTIONS.includes(type) && type !== 'Other';
+}
+
+function isoDateFromStored(v) {
+  if (!v || typeof v !== 'string') return '';
+  const p = v.split('/');
+  if (p.length === 3) {
+    const [d, m, y] = p;
+    if (y && m && d) return `${y.padStart(4, '0')}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  return '';
+}
 
 /** Small summary tile */
 function SummaryTile({ label, value, color }) {
@@ -94,6 +111,10 @@ export default function FeesPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [paymentBanner, setPaymentBanner] = useState(null); // {studentName, studentId, amount, feeType, receipt, paidDate, waPhone}
+  const [editingFee, setEditingFee] = useState(null);
+  const [editFeeTypeSelected, setEditFeeTypeSelected] = useState('Monthly Fee');
+  const [editCustomFeeType, setEditCustomFeeType] = useState('');
+  const [editRemarks, setEditRemarks] = useState('');
 
   // Student auto-lookup state
   const [studentInfo, setStudentInfo] = useState(null);
@@ -104,6 +125,15 @@ export default function FeesPage() {
   const [autoName, setAutoName] = useState('');
   const [autoCls, setAutoCls] = useState('');
   const [autoAmt, setAutoAmt] = useState('');
+  const [feeTypeSelected, setFeeTypeSelected] = useState('Monthly Fee');
+  const [customFeeType, setCustomFeeType] = useState('');
+  const [customFeeDetail, setCustomFeeDetail] = useState('');
+
+  const loadClassFeeStructure = useCallback(
+    () => (typeof api.getClassFeeSettings === 'function' ? api.getClassFeeSettings() : []),
+    [api]
+  );
+  const { data: classFeeStructure } = useAsyncResource(loadClassFeeStructure);
 
   const load = useCallback(() => {
     if (mode === 'pending') return api.getPendingFees();
@@ -168,7 +198,17 @@ export default function FeesPage() {
           if (typeof api.getClassFeeSettings === 'function') {
             const settings = await api.getClassFeeSettings();
             const s = (settings || []).find((x) => String(x.Class) === String(st.Class));
-            if (s) setAutoAmt(String(s.Amount || ''));
+            if (s) {
+              setAutoAmt(String(s.Amount || ''));
+              const savedType = String(s.Fee_Type || '').trim();
+              if (savedType && FEE_TYPE_OPTIONS.includes(savedType) && savedType !== 'Other') {
+                setFeeTypeSelected(savedType);
+                setCustomFeeType('');
+              } else if (savedType) {
+                setFeeTypeSelected('Other');
+                setCustomFeeType(savedType);
+              }
+            }
           }
         } else {
           showToast('Student not found for this ID.', 'err');
@@ -191,24 +231,34 @@ export default function FeesPage() {
       e.preventDefault();
       const fd = new FormData(e.target);
       const status = fd.get('status');
+      const chosenFeeType =
+        feeTypeSelected === 'Other' ? String(customFeeType || '').trim() : String(feeTypeSelected || '').trim();
+      if (!chosenFeeType) {
+        showToast('Please enter a fee label for "Other".', 'err');
+        return;
+      }
+      const feeDetail = feeTypeSelected === 'Other' ? String(customFeeDetail || '').trim() : '';
       const res = await api.addFeeRecord({
         studentId: fd.get('sid'),
         studentName: fd.get('snm'),
         cls: fd.get('cls') || '',
-        feeType: fd.get('ftype'),
+        feeType: chosenFeeType,
         amount: fd.get('amt'),
         dueDate: formatDateIN(fd.get('due') || ''),
         paidDate: status === 'Paid' ? formatDateIN(new Date().toISOString().slice(0, 10)) : '',
         status,
-        remarks: '',
+        remarks: feeDetail,
       });
       showToast(res.msg, res.ok ? 'ok' : 'err');
       if (res.ok) {
         resetForm(e.target);
+        setFeeTypeSelected('Monthly Fee');
+        setCustomFeeType('');
+        setCustomFeeDetail('');
         refresh();
       }
     },
-    [api, refresh, showToast, resetForm]
+    [api, customFeeDetail, customFeeType, feeTypeSelected, refresh, showToast, resetForm]
   );
 
   // Mark fee as paid — shows banner + sends WhatsApp
@@ -263,6 +313,56 @@ export default function FeesPage() {
     [api, showToast]
   );
 
+  const openEditFee = useCallback((fee) => {
+    setEditingFee({ ...fee });
+    if (fee?.Fee_Type && isPresetFeeType(String(fee.Fee_Type))) {
+      setEditFeeTypeSelected(String(fee.Fee_Type));
+      setEditCustomFeeType('');
+    } else {
+      setEditFeeTypeSelected('Other');
+      setEditCustomFeeType(String(fee?.Fee_Type || ''));
+    }
+    setEditRemarks(String(fee?.Remarks || ''));
+  }, []);
+
+  const saveEditedFee = useCallback(
+    async (e) => {
+      e.preventDefault();
+      if (!editingFee) return;
+      if (typeof api.updateFeeRecord !== 'function') {
+        showToast('Edit fee is not available in this environment.', 'err');
+        return;
+      }
+      const chosenFeeType =
+        editFeeTypeSelected === 'Other'
+          ? String(editCustomFeeType || '').trim()
+          : String(editFeeTypeSelected || '').trim();
+      if (!chosenFeeType) {
+        showToast('Please enter a fee label.', 'err');
+        return;
+      }
+      const dueRaw = editingFee._dueInput || '';
+      const paidRaw = editingFee._paidInput || '';
+      const payload = {
+        studentName: editingFee.Student_Name,
+        cls: editingFee.Class,
+        feeType: chosenFeeType,
+        amount: editingFee.Amount,
+        dueDate: dueRaw ? formatDateIN(dueRaw) : '',
+        status: editingFee.Status,
+        paidDate: editingFee.Status === 'Paid' && paidRaw ? formatDateIN(paidRaw) : '',
+        remarks: editRemarks,
+      };
+      const res = await api.updateFeeRecord(editingFee.Fee_ID, payload);
+      showToast(res.msg, res.ok ? 'ok' : 'err');
+      if (res.ok) {
+        setEditingFee(null);
+        refresh();
+      }
+    },
+    [api, editCustomFeeType, editFeeTypeSelected, editRemarks, editingFee, refresh, showToast]
+  );
+
   if (loading && !fees) return <Spinner />;
 
   return (
@@ -292,7 +392,7 @@ export default function FeesPage() {
             )}
             {studentInfo && (
               <span style={{ fontSize: '0.75rem', color: 'var(--success, #16a34a)', marginTop: 2, display: 'block' }}>
-                ✓ Found: {studentInfo.Name} — Class {studentInfo.Class}-{studentInfo.Section}
+                ✓ Found: {studentInfo.Name} — Roll {studentInfo.Roll_No ?? '—'} · Class {studentInfo.Class}-{studentInfo.Section}
                 {studentInfo.Phone ? ` · Ph: ${studentInfo.Phone}` : ''}
               </span>
             )}
@@ -310,13 +410,28 @@ export default function FeesPage() {
 
           <div className="form-group">
             <label>Fee Type</label>
-            <select name="ftype">
-              <option>Monthly Fee</option>
-              <option>Annual Fee</option>
-              <option>Sports Fee</option>
-              <option>Lab Fee</option>
-              <option>Exam Fee</option>
+            <select value={feeTypeSelected} onChange={(e) => setFeeTypeSelected(e.target.value)}>
+              {FEE_TYPE_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
             </select>
+            {feeTypeSelected === 'Other' && (
+              <>
+                <input
+                  style={{ marginTop: 8 }}
+                  value={customFeeType}
+                  onChange={(e) => setCustomFeeType(e.target.value)}
+                  placeholder="Enter custom fee label"
+                />
+                <textarea
+                  style={{ marginTop: 8 }}
+                  rows={2}
+                  value={customFeeDetail}
+                  onChange={(e) => setCustomFeeDetail(e.target.value)}
+                  placeholder="Add detail/description (saved to Firestore)"
+                />
+              </>
+            )}
           </div>
 
           <div className="form-group">
@@ -348,6 +463,7 @@ export default function FeesPage() {
                 color: 'var(--text-muted)',
               }}
             >
+              <strong>Roll No:</strong> {studentInfo.Roll_No ?? '—'} &nbsp;|&nbsp;
               <strong>Student:</strong> {studentInfo.Name} &nbsp;|&nbsp;
               <strong>Class:</strong> {studentInfo.Class}-{studentInfo.Section} &nbsp;|&nbsp;
               <strong>Father:</strong> {studentInfo.Father_Name || '—'} &nbsp;|&nbsp;
@@ -363,6 +479,43 @@ export default function FeesPage() {
             <Button type="submit">Save &amp; Notify</Button>
           </div>
         </form>
+      </Card>
+
+      <Card>
+        <CardTitle>Class-wise Fee Structure</CardTitle>
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 12 }}>
+          This shows which class has how much fee and which fee label is currently configured.
+        </p>
+        <div className="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Class</th>
+                <th>Amount</th>
+                <th>Fee Label</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(classFeeStructure || []).length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="empty" style={{ padding: 20 }}>
+                    No class fee structure saved yet.
+                  </td>
+                </tr>
+              ) : (
+                (classFeeStructure || []).map((r) => (
+                  <tr key={r.Class}>
+                    <td>Class {esc(r.Class)}</td>
+                    <td>{r.Amount === '' || r.Amount == null ? '—' : `₹${Number(r.Amount).toLocaleString('en-IN')}`}</td>
+                    <td>{esc(r.Fee_Type || '—')}</td>
+                    <td>{esc(r.Note || '—')}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       {/* ── Fee Records ── */}
@@ -421,6 +574,7 @@ export default function FeesPage() {
                 <th>Student</th>
                 <th>Class</th>
                 <th>Fee Type</th>
+                <th>Detail</th>
                 <th>Amount</th>
                 <th>Due Date</th>
                 <th>Paid Date</th>
@@ -432,7 +586,7 @@ export default function FeesPage() {
             <tbody>
               {pagedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="empty" style={{ padding: 24 }}>
+                  <td colSpan={11} className="empty" style={{ padding: 24 }}>
                     {search ? 'No records match your search.' : 'No fee records found.'}
                   </td>
                 </tr>
@@ -443,6 +597,7 @@ export default function FeesPage() {
                     <td>{esc(f.Student_Name)}</td>
                     <td>{esc(f.Class || '—')}</td>
                     <td>{esc(f.Fee_Type || '—')}</td>
+                    <td style={{ maxWidth: 200, whiteSpace: 'normal' }}>{esc(f.Remarks || '—')}</td>
                     <td>₹{Number(f.Amount).toLocaleString('en-IN')}</td>
                     <td>{esc(f.Due_Date || '—')}</td>
                     <td>{esc(f.Paid_Date || '—')}</td>
@@ -460,6 +615,14 @@ export default function FeesPage() {
                       {esc(f.Receipt_No || '—')}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        style={{ marginRight: 4 }}
+                        onClick={() => openEditFee(f)}
+                      >
+                        Edit
+                      </Button>
                       {f.Status === 'Pending' && (
                         <>
                           <Button
@@ -523,6 +686,92 @@ export default function FeesPage() {
 
         <PaginationBar page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
       </Card>
+
+      <Modal open={!!editingFee} title="Edit Fee Record" onClose={() => setEditingFee(null)}>
+        {editingFee && (
+          <form className="form-grid" onSubmit={saveEditedFee}>
+            <div className="form-group">
+              <label>Student ID</label>
+              <input value={editingFee.Student_ID || ''} readOnly />
+            </div>
+            <div className="form-group">
+              <label>Student Name</label>
+              <input
+                value={editingFee.Student_Name || ''}
+                onChange={(e) => setEditingFee((p) => ({ ...p, Student_Name: e.target.value }))}
+              />
+            </div>
+            <div className="form-group">
+              <label>Class</label>
+              <input
+                value={editingFee.Class || ''}
+                onChange={(e) => setEditingFee((p) => ({ ...p, Class: e.target.value }))}
+              />
+            </div>
+            <div className="form-group">
+              <label>Fee Type</label>
+              <select value={editFeeTypeSelected} onChange={(e) => setEditFeeTypeSelected(e.target.value)}>
+                {FEE_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+              {editFeeTypeSelected === 'Other' && (
+                <input
+                  style={{ marginTop: 8 }}
+                  value={editCustomFeeType}
+                  onChange={(e) => setEditCustomFeeType(e.target.value)}
+                  placeholder="Enter custom fee label"
+                />
+              )}
+            </div>
+            <div className="form-group">
+              <label>Amount</label>
+              <input
+                type="number"
+                min={0}
+                value={editingFee.Amount ?? 0}
+                onChange={(e) => setEditingFee((p) => ({ ...p, Amount: e.target.value }))}
+              />
+            </div>
+            <div className="form-group">
+              <label>Due Date</label>
+              <input
+                type="date"
+                value={editingFee._dueInput ?? isoDateFromStored(editingFee.Due_Date)}
+                onChange={(e) => setEditingFee((p) => ({ ...p, _dueInput: e.target.value }))}
+              />
+            </div>
+            <div className="form-group">
+              <label>Status</label>
+              <select
+                value={editingFee.Status || 'Pending'}
+                onChange={(e) => setEditingFee((p) => ({ ...p, Status: e.target.value }))}
+              >
+                <option value="Pending">Pending</option>
+                <option value="Paid">Paid</option>
+              </select>
+            </div>
+            {editingFee.Status === 'Paid' && (
+              <div className="form-group">
+                <label>Paid Date</label>
+                <input
+                  type="date"
+                  value={editingFee._paidInput ?? isoDateFromStored(editingFee.Paid_Date)}
+                  onChange={(e) => setEditingFee((p) => ({ ...p, _paidInput: e.target.value }))}
+                />
+              </div>
+            )}
+            <div className="form-group full">
+              <label>Detail / Remarks</label>
+              <textarea rows={3} value={editRemarks} onChange={(e) => setEditRemarks(e.target.value)} />
+            </div>
+            <div className="form-group full btn-row">
+              <Button type="submit">Save Changes</Button>
+              <Button type="button" variant="ghost" onClick={() => setEditingFee(null)}>Cancel</Button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </>
   );
 }

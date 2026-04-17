@@ -15,6 +15,7 @@ const FEE_LABEL_OPTIONS = [
   'Term fee',
   'Development fee',
   'Composite annual fee',
+  'Other',
 ];
 
 const emptyRow = () => ({
@@ -22,6 +23,11 @@ const emptyRow = () => ({
   feeType: ADMIN_CLASS_FEE_TYPE,
   note: '',
 });
+
+function isPresetFeeLabel(label) {
+  if (!label) return false;
+  return FEE_LABEL_OPTIONS.includes(label) && label !== 'Other';
+}
 
 export default function ClassFeeSettingsPage() {
   const api = useApi();
@@ -130,9 +136,20 @@ export default function ClassFeeSettingsPage() {
                       />
                     </td>
                     <td>
+                      {(() => {
+                        const selectValue = isPresetFeeLabel(row.feeType) ? row.feeType : 'Other';
+                        return (
+                          <>
                       <select
-                        value={row.feeType}
-                        onChange={(e) => updateField(cls, 'feeType', e.target.value)}
+                        value={selectValue}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === 'Other') {
+                            updateField(cls, 'feeType', isPresetFeeLabel(row.feeType) ? '' : row.feeType);
+                          } else {
+                            updateField(cls, 'feeType', value);
+                          }
+                        }}
                       >
                         {FEE_LABEL_OPTIONS.map((opt) => (
                           <option key={opt} value={opt}>
@@ -140,6 +157,18 @@ export default function ClassFeeSettingsPage() {
                           </option>
                         ))}
                       </select>
+                      {selectValue === 'Other' && (
+                        <input
+                          type="text"
+                          style={{ marginTop: 8, minWidth: 140, padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+                          value={row.feeType}
+                          onChange={(e) => updateField(cls, 'feeType', e.target.value)}
+                          placeholder="Enter custom fee label"
+                        />
+                      )}
+                          </>
+                        );
+                      })()}
                     </td>
                     <td>
                       <input

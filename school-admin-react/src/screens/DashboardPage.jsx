@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { Card, ChartCard } from '../components/common/Card.jsx';
 import { StatCard } from '../components/common/StatCard.jsx';
@@ -9,6 +9,7 @@ import {
   IconRefresh, IconTimetables, IconTrendUp, IconChartBar, IconCheck,
   IconUsers, IconMoney, IconClock,
 } from '../components/common/Icons.jsx';
+import { PaginationBar } from '../components/common/PaginationBar.jsx';
 import { useApi } from '../hooks/useApi.js';
 import { useAsyncResource } from '../hooks/useAsyncResource.js';
 import { useAuth } from '../hooks/useAuth.js';
@@ -456,15 +457,42 @@ function AttendanceTrendsPanel({ chartData }) {
   );
 }
 
+const FEE_PAGE_SIZE = 15;
+const FEE_MODES = [
+  { id: 'all', label: 'All' },
+  { id: 'paid', label: 'Paid' },
+  { id: 'pending', label: 'Pending' },
+];
+
 function FeesPanel({ api }) {
   const [feeClass, setFeeClass] = useState('');
+  const [search, setSearch] = useState('');
+  const [mode, setMode] = useState('all');
+  const [page, setPage] = useState(1);
   const load = useCallback(() => api.getAllFees(), [api]);
   const { data: fees } = useAsyncResource(load);
+
+  // reset page when filter changes
+  useEffect(() => { setPage(1); }, [search, mode, feeClass]);
 
   const classOptions = useMemo(() => {
     const s = new Set((fees || []).map((f) => String(f.Class || '')).filter(Boolean));
     return [...s].sort((a, b) => Number(a) - Number(b) || a.localeCompare(b));
   }, [fees]);
+
+  const { filteredFees, pagedFees } = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let rows = fees || [];
+    if (mode !== 'all') rows = rows.filter((f) => f.Status?.toLowerCase() === mode);
+    if (feeClass) rows = rows.filter((f) => String(f.Class) === String(feeClass));
+    if (q) rows = rows.filter((f) =>
+      String(f.Student_ID || '').toLowerCase().includes(q) ||
+      String(f.Student_Name || '').toLowerCase().includes(q) ||
+      String(f.Fee_Type || '').toLowerCase().includes(q)
+    );
+    const start = (page - 1) * FEE_PAGE_SIZE;
+    return { filteredFees: rows, pagedFees: rows.slice(start, start + FEE_PAGE_SIZE) };
+  }, [fees, search, mode, feeClass, page]);
 
   const { revenueByClassBar, pendingByClassBar, feesTrendLine } = useMemo(() => {
     const allFees = fees || [];
@@ -597,6 +625,100 @@ function FeesPanel({ api }) {
         <div className="chart-container">
           <Line data={feesTrendLine} options={chartOptions} />
         </div>
+      </Card>
+
+      <Card style={{ marginTop: 24 }}>
+        <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14 }}>
+          <IconMoney size={16} strokeWidth={2} />
+          Fee Records
+        </div>
+        <div className="filter-bar" style={{ marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 0, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
+            {FEE_MODES.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => setMode(m.id)}
+                style={{
+                  padding: '5px 14px',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: mode === m.id ? 'var(--accent)' : 'var(--surface)',
+                  color: mode === m.id ? '#fff' : 'var(--text)',
+                  transition: 'background 0.15s',
+                }}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <input
+            placeholder="Search student / ID / fee type..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ flex: 1, minWidth: 200 }}
+          />
+          <select value={feeClass} onChange={(e) => { setFeeClass(e.target.value); setPage(1); }} style={{ minWidth: 120 }}>
+            <option value="">All classes</option>
+            {classOptions.map((c) => (
+              <option key={c} value={c}>Class {esc(c)}</option>
+            ))}
+          </select>
+        </div>
+        <div className="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Roll</th>
+                <th>Student Name</th>
+                <th>Class</th>
+                <th>Fee Type</th>
+                <th>Amount</th>
+                <th>Due Date</th>
+                <th>Paid Date</th>
+                <th>Status</th>
+                <th>Receipt</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pagedFees.length === 0 ? (
+                <tr>
+                  <td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px 0' }}>
+                    No records found.
+                  </td>
+                </tr>
+              ) : pagedFees.map((f) => (
+                <tr key={f.Fee_ID}>
+                  <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{esc(f.Student_ID)}</td>
+                  <td style={{ fontWeight: 700, color: 'var(--text-muted)' }}>{f.Roll_No ?? '—'}</td>
+                  <td style={{ fontWeight: 600 }}>{esc(f.Student_Name)}</td>
+                  <td>{esc(f.Class)}</td>
+                  <td>{esc(f.Fee_Type)}</td>
+                  <td>₹{Number(f.Amount || 0).toLocaleString('en-IN')}</td>
+                  <td style={{ fontSize: '0.82rem' }}>{esc(f.Due_Date) || '—'}</td>
+                  <td style={{ fontSize: '0.82rem' }}>{esc(f.Paid_Date) || '—'}</td>
+                  <td>
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '2px 10px',
+                      borderRadius: 12,
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      background: f.Status === 'Paid' ? '#dcfce7' : '#fee2e2',
+                      color: f.Status === 'Paid' ? '#15803d' : '#dc2626',
+                    }}>
+                      {esc(f.Status)}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{esc(f.Receipt_No) || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <PaginationBar page={page} pageSize={FEE_PAGE_SIZE} total={filteredFees.length} onPageChange={setPage} />
       </Card>
     </>
   );

@@ -11,9 +11,16 @@ import { useApi } from '../hooks/useApi.js';
 import { useAsyncResource } from '../hooks/useAsyncResource.js';
 import { useToast } from '../hooks/useToast.js';
 import { esc } from '../utils/format.js';
+import { downloadBlob } from '../utils/resultPdf.js';
 
 const PAGE_SIZE = 10;
 const MAX_PHOTO_BYTES = 200 * 1024; // 200 KB
+
+function csvEscape(value) {
+  const text = String(value ?? '');
+  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
 
 /* ── Photo Picker ───────────────────────────────────────────────────── */
 function PhotoPicker({ value, onChange }) {
@@ -225,6 +232,46 @@ export default function TeachersPage() {
     }
   }, [api, deletingTeacher, refresh, showToast]);
 
+  const downloadTeachersCsv = useCallback(() => {
+    const rows = filtered || [];
+    if (!rows.length) {
+      showToast('No teacher data to download.', 'err');
+      return;
+    }
+    const header = [
+      'Teacher_ID',
+      'Name',
+      'Subject',
+      'Phone',
+      'Email',
+      'Qualification',
+      'Class_Assigned',
+      'Section_Assigned',
+      'Join_Date',
+      'Status',
+    ];
+    const lines = [header.join(',')];
+    rows.forEach((t) => {
+      const row = [
+        t.Teacher_ID,
+        t.Name,
+        t.Subject,
+        t.Phone,
+        t.Email,
+        t.Qualification,
+        t.Class_Assigned,
+        t.Section_Assigned,
+        t.Join_Date,
+        t.Status,
+      ];
+      lines.push(row.map(csvEscape).join(','));
+    });
+    const blob = new Blob(['\ufeff', lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadBlob(blob, `teachers-data-${stamp}.csv`);
+    showToast('Teacher CSV downloaded.', 'ok');
+  }, [filtered, showToast]);
+
   if (loading && !teachers) return <Spinner />;
 
   return (
@@ -304,7 +351,15 @@ export default function TeachersPage() {
       </Card>
 
       <Card>
-        <SectionHeader title="All Teachers" actions={<Button onClick={() => refresh()} size="sm" variant="ghost"><IconRefresh size={14} /> Refresh</Button>} />
+        <SectionHeader
+          title="All Teachers"
+          actions={(
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button onClick={downloadTeachersCsv} size="sm" variant="ghost">Download CSV</Button>
+              <Button onClick={() => refresh()} size="sm" variant="ghost"><IconRefresh size={14} /> Refresh</Button>
+            </div>
+          )}
+        />
         <div className="filter-bar">
           <input placeholder="Search…" style={{ flex: 1 }} value={q} onChange={(e) => setQ(e.target.value)} />
         </div>

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(cat)",
+      "Bash(chmod +x /tmp/check_mutations.sh)",
+      "Bash(bash /tmp/check_mutations.sh)",
+      "Bash(grep -E \"\\\\.jsx?$\")",
+      "Bash(grep -n \"api\\\\.mark\" /c/Users/lenovo/OneDrive/文件/GitHub/EduManage/school-admin-react/src/screens/*.jsx)",
+      "Bash(grep -nE \"api\\\\.\\(addHomework|updateHomework|deleteHomework|addHoliday|deleteHoliday|saveWhatsAppSchedule|addSalary|deleteSalary\\)\" /c/Users/lenovo/OneDrive/文件/GitHub/EduManage/school-admin-react/src/screens/*.jsx)"
+    ]
+  }
+}

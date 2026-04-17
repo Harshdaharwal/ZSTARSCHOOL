@@ -233,7 +233,8 @@ export default function ExamsPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>ID</th>
+                    <th>Mark ID</th>
+                    <th>Roll</th>
                     <th>Student</th>
                     <th>Subject</th>
                     <th>Marks</th>
@@ -243,8 +244,12 @@ export default function ExamsPage() {
                 <tbody>
                   {(marks || []).map((m) => (
                     <tr key={m.Mark_ID}>
-                      <td>{esc(m.Mark_ID)}</td>
-                      <td>{esc(m.Student_Name)}</td>
+                      <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{esc(m.Mark_ID)}</td>
+                      <td style={{ fontWeight: 700, color: 'var(--text-muted)' }}>{m.Roll_No ?? '—'}</td>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{esc(m.Student_Name)}</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{esc(m.Student_ID)}</div>
+                      </td>
                       <td>{esc(m.Subject)}</td>
                       <td>
                         {esc(m.Marks_Obtained)}/{esc(m.Max_Marks)}

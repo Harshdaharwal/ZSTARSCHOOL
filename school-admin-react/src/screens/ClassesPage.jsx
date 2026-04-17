@@ -63,6 +63,13 @@ export default function ClassesPage() {
     async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
+      const from = fd.get('timeFrom') || '';
+      const to = fd.get('timeTo') || '';
+      if (from && to && from >= to) {
+        showToast('"To" time must be after "From" time.', 'err');
+        return;
+      }
+      const timeSlot = from && to ? `${from}–${to}` : from || to || '';
       const res = await api.addSchedule({
         cls: fd.get('cls'),
         section: fd.get('section'),
@@ -71,7 +78,7 @@ export default function ClassesPage() {
         subject: fd.get('subject'),
         teacherName: fd.get('tname') || '',
         room: fd.get('room') || '',
-        timeSlot: fd.get('time') || '',
+        timeSlot,
       });
       showToast(res.msg, res.ok ? 'ok' : 'err');
       if (res.ok) e.target.reset();
@@ -216,8 +223,12 @@ export default function ClassesPage() {
                 <input name="room" />
               </div>
               <div className="form-group">
-                <label>Time</label>
-                <input name="time" placeholder="09:00-09:45" />
+                <label>From</label>
+                <input name="timeFrom" type="time" />
+              </div>
+              <div className="form-group">
+                <label>To</label>
+                <input name="timeTo" type="time" />
               </div>
               <div className="form-group full btn-row">
                 <Button type="submit">Add</Button>
@@ -260,6 +271,16 @@ export default function ClassesPage() {
                         <span>{esc(p.Subject)}</span>
                         <span>{esc(p.Teacher_Name)}</span>
                         <span>{esc(p.Room)}</span>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                          {p.Time_Slot
+                            ? (() => {
+                                const parts = String(p.Time_Slot).split(/[–\-]/);
+                                return parts.length === 2
+                                  ? `From ${parts[0].trim()} To ${parts[1].trim()}`
+                                  : esc(p.Time_Slot);
+                              })()
+                            : '—'}
+                        </span>
                         <span>
                           <Button
                             variant="danger"

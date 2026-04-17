@@ -44,6 +44,7 @@ const GAS_METHODS = [
   'getScheduleForTeacherDay',
   'getTimetables',
   'addTimetable',
+  'updateTimetable',
   'deleteTimetable',
   'getAnnouncements',
   'addAnnouncement',

@@ -17,6 +17,11 @@ const LOCKOUT_MS = 30_000; // 30 seconds
 
 const ROLES = ['admin', 'teacher'];
 
+function pickTeacherId(profile) {
+  if (!profile || typeof profile !== 'object') return '';
+  return String(profile.teacherId || profile.Teacher_ID || profile.teacher_id || '').trim();
+}
+
 function readCachedUser() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -41,11 +46,12 @@ function readCachedUser() {
 }
 
 function mapProfileToFirestoreUser(fu, d) {
+  const teacherId = pickTeacherId(d);
   return {
     email: fu.email || '',
     role: d.role,
     uid: fu.uid,
-    teacherId: d.teacherId || '',
+    teacherId,
     studentIds: Array.isArray(d.studentIds) ? d.studentIds : [],
   };
 }
@@ -149,13 +155,14 @@ export function AuthProvider({ children }) {
         // Ensure canonical profile exists under docId=uid for faster subsequent logins.
         try {
           const emailTrim = String(fu.email || d.email || '').trim();
+          const teacherId = pickTeacherId(d);
           await setDoc(
             doc(fb.db, 'users', fu.uid),
             {
               email: emailTrim,
               email_lc: emailTrim.toLowerCase(),
               role: d.role,
-              teacherId: d.teacherId || '',
+              teacherId,
               studentIds: Array.isArray(d.studentIds) ? d.studentIds : [],
               uid: fu.uid,
             },
@@ -238,13 +245,14 @@ export function AuthProvider({ children }) {
         // Canonicalize and persist under docId=uid for future logins.
         try {
           const emailTrim = String(cred.user.email || d.email || '').trim();
+          const teacherId = pickTeacherId(d);
           await setDoc(
             doc(fb.db, 'users', cred.user.uid),
             {
               email: emailTrim,
               email_lc: emailTrim.toLowerCase(),
               role: d.role,
-              teacherId: d.teacherId || '',
+              teacherId,
               studentIds: Array.isArray(d.studentIds) ? d.studentIds : [],
               uid: cred.user.uid,
             },

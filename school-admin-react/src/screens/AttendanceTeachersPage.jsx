@@ -5,8 +5,10 @@ import { FilterTabs } from '../components/common/FilterTabs.jsx';
 import { IconAttendanceTeachers, IconEdit } from '../components/common/Icons.jsx';
 import { useApi } from '../hooks/useApi.js';
 import { useAsyncResource } from '../hooks/useAsyncResource.js';
+import { useAuth } from '../hooks/useAuth.js';
 import { useToast } from '../hooks/useToast.js';
 import { formatDateIN, esc } from '../utils/format.js';
+import { downloadAttendancePdf } from '../utils/attendancePdf.js';
 
 const TABS = [
   { id: 'mark', label: 'Mark Attendance', Icon: IconAttendanceTeachers },
@@ -15,7 +17,9 @@ const TABS = [
 
 export default function AttendanceTeachersPage() {
   const api = useApi();
+  const { user } = useAuth();
   const { showToast } = useToast();
+  const isAdmin = user?.role === 'admin';
   const load = useCallback(() => api.getAllTeachers(), [api]);
   const { data: teachers } = useAsyncResource(load);
 
@@ -85,6 +89,39 @@ export default function AttendanceTeachersPage() {
     [api]
   );
 
+  const downloadTeachersAttendancePdf = useCallback(() => {
+    if (!teachers?.length) {
+      showToast('No teacher attendance data to download.', 'err');
+      return;
+    }
+    const dateStr = formatDateIN(attDate);
+    const body = teachers.map((t) => {
+      const code = att[t.Teacher_ID] || 'P';
+      const status = code === 'P' ? 'Present' : code === 'A' ? 'Absent' : 'Leave';
+      return [t.Teacher_ID, t.Name, t.Subject || '', status];
+    });
+    const total = body.length;
+    const present = body.filter((r) => r[3] === 'Present').length;
+    const absent = body.filter((r) => r[3] === 'Absent').length;
+    const leave = body.filter((r) => r[3] === 'Leave').length;
+    const pct = total ? ((present / total) * 100).toFixed(1) : '0.0';
+    downloadAttendancePdf({
+      title: 'Teacher Daily Attendance',
+      subtitle: `Date: ${dateStr}`,
+      head: ['Teacher ID', 'Name', 'Subject', 'Status'],
+      body,
+      summaryLines: [
+        `Total: ${total}`,
+        `Present: ${present}`,
+        `Absent: ${absent}`,
+        `Leave: ${leave}`,
+        `Attendance: ${pct}%`,
+      ],
+      filename: `teacher-attendance-${dateStr.replace(/\//g, '-')}.pdf`,
+    });
+    showToast('Teacher attendance PDF downloaded.', 'ok');
+  }, [att, attDate, showToast, teachers]);
+
   return (
     <>
       <FilterTabs tabs={TABS} activeId={tab} onChange={setTab} />
@@ -153,6 +190,11 @@ export default function AttendanceTeachersPage() {
           <Button variant="success" onClick={save}>
             Save {tab === 'edit' ? 'changes' : 'attendance'}
           </Button>
+          {isAdmin && (
+            <Button type="button" variant="ghost" onClick={downloadTeachersAttendancePdf}>
+              Download PDF
+            </Button>
+          )}
         </div>
       </Card>
 

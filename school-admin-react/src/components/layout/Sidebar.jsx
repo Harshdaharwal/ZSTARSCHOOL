@@ -12,7 +12,7 @@ import {
 
 const ALL_LINKS = [
   { to: '/', labelKey: 'nav.dashboard', Icon: IconDashboard, end: true, adminOnly: false },
-  { to: '/students', labelKey: 'nav.students', Icon: IconStudents, adminOnly: true },
+  { to: '/students', labelKey: 'nav.students', Icon: IconStudents, adminOnly: false },
   { to: '/teachers', labelKey: 'nav.teachers', Icon: IconTeachers, adminOnly: true },
   { to: '/classes', labelKey: 'nav.classes', Icon: IconClasses, adminOnly: true },
   { to: '/attendance/students', labelKey: 'nav.attStu', Icon: IconAttendanceStudents, adminOnly: false },

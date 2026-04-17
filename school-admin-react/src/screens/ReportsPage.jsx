@@ -90,10 +90,16 @@ export default function ReportsPage() {
               </div>
               <div className="report-info">
                 <div>
+                  <strong>Roll No</strong> {str(single.student.Roll_No || '—')}
+                </div>
+                <div>
                   <strong>ID</strong> {str(single.student.Student_ID)}
                 </div>
                 <div>
                   <strong>Class</strong> {str(single.student.Class)}-{str(single.student.Section)}
+                </div>
+                <div>
+                  <strong>Father</strong> {str(single.student.Father_Name || '—')}
                 </div>
               </div>
               <table className="marksheet-table">
@@ -155,8 +161,10 @@ export default function ReportsPage() {
                     <span className="bulk-report-name">{str(rep.student.Name)}</span>
                   </div>
                   <p className="bulk-report-summary">
-                    ID: {str(rep.student.Student_ID)} &nbsp;|&nbsp; {str(rep.overallPct)}% (
-                    {str(rep.overallGrade)}) &nbsp;|&nbsp; Att {str(rep.attendance.pct)}%
+                    Roll: <strong>{str(rep.student.Roll_No || '—')}</strong> &nbsp;|&nbsp;
+                    ID: {str(rep.student.Student_ID)} &nbsp;|&nbsp;
+                    Class: {str(rep.student.Class)}-{str(rep.student.Section)} &nbsp;|&nbsp;
+                    {str(rep.overallPct)}% ({str(rep.overallGrade)}) &nbsp;|&nbsp; Att {str(rep.attendance.pct)}%
                   </p>
                 </div>
               ))}

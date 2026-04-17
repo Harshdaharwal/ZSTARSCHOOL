@@ -63,9 +63,7 @@ export default function App() {
                     path="/students"
                     element={
                       <Suspense fallback={<SuspenseFallback />}>
-                        <RequireAdmin>
-                          <StudentsPage />
-                        </RequireAdmin>
+                        <StudentsPage />
                       </Suspense>
                     }
                   />

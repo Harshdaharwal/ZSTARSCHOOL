@@ -61,6 +61,7 @@ const WRITE_METHODS = new Set([
   'addSchedule',
   'deleteSchedule',
   'addFeeRecord',
+  'updateFeeRecord',
   'deleteFeeRecord',
   'saveClassFeeSetting',
   'addExam',
@@ -75,6 +76,7 @@ const WRITE_METHODS = new Set([
   'markSalaryPaid',
   'deleteSalaryRecord',
   'addTimetable',
+  'updateTimetable',
   'deleteTimetable',
   'addHomework',
   'addHoliday',
@@ -98,7 +100,13 @@ export function ApiProvider({ children }) {
     } else {
       baseApiRef.current = createMockApi(() =>
         user
-          ? { email: user.email, role: user.role, teacherId: user.teacherId ?? '', studentIds: user.studentIds ?? [] }
+          ? {
+              email: user.email,
+              role: user.role,
+              uid: user.uid ?? '',
+              teacherId: user.teacherId ?? '',
+              studentIds: user.studentIds ?? [],
+            }
           : null
       );
     }

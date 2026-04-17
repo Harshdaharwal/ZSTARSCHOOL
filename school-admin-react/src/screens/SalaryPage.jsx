@@ -11,6 +11,7 @@ import {
 import { Card, ChartCard } from '../components/common/Card.jsx';
 import { StatCard } from '../components/common/StatCard.jsx';
 import { Button } from '../components/common/Button.jsx';
+import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 import { SectionHeader } from '../components/common/SectionHeader.jsx';
 import { Spinner } from '../components/common/Spinner.jsx';
 import { IconCalendar, IconChartBar, IconRefresh, IconPlus, IconSalary, IconBriefcase, IconBuilding, IconClock, IconCheck, IconTeachers } from '../components/common/Icons.jsx';
@@ -52,6 +53,7 @@ export default function SalaryPage() {
   const [searchQ, setSearchQ] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [confirm, setConfirm] = useState(null);
 
   const now = new Date();
 
@@ -233,10 +235,19 @@ export default function SalaryPage() {
   );
 
   const deleteSalary = useCallback(
-    async (id) => {
-      const res = await api.deleteSalaryRecord(id);
-      showToast(res.msg, res.ok ? 'ok' : 'err');
-      if (res.ok) refresh();
+    (id, name) => {
+      setConfirm({
+        title: 'Delete salary record?',
+        message: `Remove salary record for "${name}"? This cannot be undone.`,
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: async () => {
+          const res = await api.deleteSalaryRecord(id);
+          showToast(res.msg, res.ok ? 'ok' : 'err');
+          if (res.ok) refresh();
+          setConfirm(null);
+        },
+      });
     },
     [api, refresh, showToast]
   );
@@ -245,6 +256,15 @@ export default function SalaryPage() {
 
   return (
     <>
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmLabel={confirm?.confirmLabel}
+        danger={confirm?.danger}
+        onConfirm={confirm?.onConfirm}
+        onCancel={() => setConfirm(null)}
+      />
       {/* ── Page Header ── */}
       <SectionHeader
         title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><IconBriefcase size={18} strokeWidth={2} />Salary Management</span>}
@@ -537,7 +557,7 @@ export default function SalaryPage() {
                         <Button
                           variant="danger"
                           size="sm"
-                          onClick={() => deleteSalary(s.Salary_ID)}
+                          onClick={() => deleteSalary(s.Salary_ID, s.Name)}
                         >
                           ✕
                         </Button>

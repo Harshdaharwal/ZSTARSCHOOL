@@ -11,12 +11,20 @@ import { PaginationBar } from '../components/common/PaginationBar.jsx';
 import { useApi } from '../hooks/useApi.js';
 import { useAsyncResource } from '../hooks/useAsyncResource.js';
 import { useFilteredList } from '../hooks/useFilteredList.js';
+import { useAuth } from '../hooks/useAuth.js';
 import { useToast } from '../hooks/useToast.js';
 import { esc } from '../utils/format.js';
 import { ACADEMIC_YEAR, ACADEMIC_YEAR_OPTIONS } from '../config/schoolConfig.js';
+import { downloadBlob } from '../utils/resultPdf.js';
 
 const PAGE_SIZE = 20;
 const MAX_PHOTO_BYTES = 200 * 1024; // 200 KB
+
+function csvEscape(value) {
+  const text = String(value ?? '');
+  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
 
 /* ── Photo Picker ───────────────────────────────────────────────────── */
 function PhotoPicker({ value, onChange }) {
@@ -112,7 +120,9 @@ function PhotoThumb({ src, name }) {
 /* ── Page ───────────────────────────────────────────────────────────── */
 export default function StudentsPage() {
   const api = useApi();
+  const { user } = useAuth();
   const { showToast } = useToast();
+  const isAdmin = user?.role === 'admin';
   const load = useCallback(() => api.getAllStudents(), [api]);
   const { data: students, loading, refresh } = useAsyncResource(load);
 
@@ -211,10 +221,59 @@ export default function StudentsPage() {
     [api, addPhoto, refresh, showToast]
   );
 
+  const downloadStudentsCsv = useCallback(() => {
+    const rows = filtered || [];
+    if (!rows.length) {
+      showToast('No student data to download.', 'err');
+      return;
+    }
+    const header = [
+      'Student_ID',
+      'Roll_No',
+      'Name',
+      'Father_Name',
+      'Mother_Name',
+      'Class',
+      'Section',
+      'Academic_Year',
+      'DOB',
+      'Gender',
+      'Phone',
+      'Parent_WhatsApp',
+      'Address',
+      'Status',
+    ];
+    const lines = [header.join(',')];
+    rows.forEach((s) => {
+      const row = [
+        s.Student_ID,
+        s.Roll_No ?? '',
+        s.Name,
+        s.Father_Name,
+        s.Mother_Name,
+        s.Class,
+        s.Section,
+        s.Academic_Year,
+        s.DOB,
+        s.Gender,
+        s.Phone,
+        s.Parent_WhatsApp,
+        s.Address,
+        s.Status,
+      ];
+      lines.push(row.map(csvEscape).join(','));
+    });
+    const blob = new Blob(['\ufeff', lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadBlob(blob, `students-data-${stamp}.csv`);
+    showToast('Student CSV downloaded.', 'ok');
+  }, [filtered, showToast]);
+
   if (loading && !students) return <Spinner />;
 
   return (
     <>
+      {isAdmin && (
       <Card>
         <CardTitle><IconPlus size={16} strokeWidth={2.5} style={{ verticalAlign: 'middle', marginRight: 6 }} />New Student Registration</CardTitle>
         <form className="form-grid" onSubmit={addStudent}>
@@ -292,9 +351,18 @@ export default function StudentsPage() {
           </div>
         </form>
       </Card>
+      )}
 
       <Card>
-        <SectionHeader title="All Students" actions={<Button onClick={() => refresh()} size="sm" variant="ghost"><IconRefresh size={14} /> Refresh</Button>} />
+        <SectionHeader
+          title="All Students"
+          actions={(
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button onClick={downloadStudentsCsv} size="sm" variant="ghost">Download CSV</Button>
+              <Button onClick={() => refresh()} size="sm" variant="ghost"><IconRefresh size={14} /> Refresh</Button>
+            </div>
+          )}
+        />
         <div className="filter-bar">
           <input placeholder="Search…" style={{ flex: 1, minWidth: 200 }} value={q} onChange={(e) => setQ(e.target.value)} />
           <label className="filter-label-inline">
@@ -332,19 +400,20 @@ export default function StudentsPage() {
             <thead>
               <tr>
                 <th>Photo</th>
+                <th>Roll</th>
                 <th>ID</th>
                 <th>Name</th>
                 <th>Class</th>
                 <th>Section</th>
                 <th>Year</th>
                 <th>Status</th>
-                <th>Actions</th>
+                {isAdmin && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: 0, border: 'none' }}>
+                  <td colSpan={isAdmin ? 9 : 8} style={{ padding: 0, border: 'none' }}>
                     <EmptyState
                       title="No students to show"
                       hint="Adjust search or filters, or register a student above."
@@ -355,6 +424,7 @@ export default function StudentsPage() {
                 pagedRows.map((s) => (
                   <tr key={s.Student_ID}>
                     <td><PhotoThumb src={s.Photo} name={s.Name} /></td>
+                    <td style={{ fontWeight: 700, color: 'var(--text-muted)' }}>{s.Roll_No ?? '—'}</td>
                     <td>{esc(s.Student_ID)}</td>
                     <td>{esc(s.Name)}</td>
                     <td>{esc(s.Class)}</td>
@@ -363,7 +433,7 @@ export default function StudentsPage() {
                     <td>
                       <Badge kind={s.Status === 'Active' ? 'success' : 'danger'}>{s.Status}</Badge>
                     </td>
-                    <td>
+                    {isAdmin && <td>
                       <Button size="sm" onClick={() => openEdit(s)}>
                         Edit
                       </Button>{' '}
@@ -374,7 +444,7 @@ export default function StudentsPage() {
                       >
                         {s.Status === 'Active' ? 'Deactivate' : 'Activate'}
                       </Button>
-                    </td>
+                    </td>}
                   </tr>
                 ))
               )}
@@ -387,6 +457,7 @@ export default function StudentsPage() {
         </p>
       </Card>
 
+      {isAdmin && (
       <Modal open={modalOpen} title="Edit Student" onClose={() => setModalOpen(false)}>
         {edit && (
           <form onSubmit={onSave} className="form-grid">
@@ -397,6 +468,24 @@ export default function StudentsPage() {
               <PhotoPicker value={editPhoto} onChange={setEditPhoto} />
             </div>
 
+            <div className="form-group">
+              <label>Roll No</label>
+              <input
+                value={edit.Roll_No ?? '—'}
+                readOnly
+                style={{ background: 'var(--input-disabled-bg,#f3f4f6)', cursor: 'not-allowed', color: 'var(--text-muted)' }}
+                title="Roll number is auto-assigned"
+              />
+            </div>
+            <div className="form-group">
+              <label>Student ID</label>
+              <input
+                value={edit.Student_ID}
+                readOnly
+                style={{ background: 'var(--input-disabled-bg,#f3f4f6)', cursor: 'not-allowed', color: 'var(--text-muted)' }}
+                title="Student ID cannot be changed"
+              />
+            </div>
             <div className="form-group">
               <label>Name</label>
               <input name="name" defaultValue={edit.Name} />
@@ -449,6 +538,7 @@ export default function StudentsPage() {
           </form>
         )}
       </Modal>
+      )}
     </>
   );
 }

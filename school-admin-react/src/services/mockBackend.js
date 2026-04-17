@@ -815,9 +815,51 @@ export function createMockApi(getActor) {
         if (i === -1) DB.exams.push(row);
         else Object.assign(DB.exams[i], row);
       }),
+      tryMergeCollectionIntoDb('marks', (id, data) => {
+        const row = { ...data, Mark_ID: data?.Mark_ID || id };
+        const i = DB.marks.findIndex((x) => x.Mark_ID === row.Mark_ID);
+        if (i === -1) DB.marks.push(row);
+        else Object.assign(DB.marks[i], row);
+      }),
+      tryMergeCollectionIntoDb('teacher_attendance', (id, data) => {
+        const row = { ...data, Teacher_ID: data?.Teacher_ID || '', Date: data?.Date || '' };
+        if (!row.Teacher_ID || !row.Date) return;
+        const i = DB.att_tch.findIndex((x) => x.Teacher_ID === row.Teacher_ID && x.Date === row.Date);
+        if (i === -1) DB.att_tch.push(row);
+        else Object.assign(DB.att_tch[i], row);
+      }),
+      tryMergeCollectionIntoDb('timetables', (id, data) => {
+        const row = { ...data, Entry_ID: data?.Entry_ID || id };
+        const i = DB.timetables.findIndex((x) => x.Entry_ID === row.Entry_ID);
+        if (i === -1) DB.timetables.push(row);
+        else Object.assign(DB.timetables[i], row);
+      }),
+      tryMergeCollectionIntoDb('homework', (id, data) => {
+        const row = { ...data, Homework_ID: data?.Homework_ID || id };
+        const i = DB.homework.findIndex((x) => x.Homework_ID === row.Homework_ID);
+        if (i === -1) DB.homework.push(row);
+        else Object.assign(DB.homework[i], row);
+      }),
+      tryMergeCollectionIntoDb('holidays', (id, data) => {
+        const row = { ...data, Holiday_ID: data?.Holiday_ID || id };
+        const i = DB.holidays.findIndex((x) => x.Holiday_ID === row.Holiday_ID);
+        if (i === -1) DB.holidays.push(row);
+        else Object.assign(DB.holidays[i], row);
+      }),
+      tryMergeCollectionIntoDb('salaries', (id, data) => {
+        const row = { ...data, Salary_ID: data?.Salary_ID || id };
+        const i = DB.salaries.findIndex((x) => x.Salary_ID === row.Salary_ID);
+        if (i === -1) DB.salaries.push(row);
+        else Object.assign(DB.salaries[i], row);
+      }),
+      tryMergeCollectionIntoDb('settings', (id, data) => {
+        if (id === 'whatsapp_schedule') {
+          DB.whatsapp_schedule = { ...(DB.whatsapp_schedule || {}), ...data };
+        }
+      }),
     ]);
   }
-  return {
+  const api = {
     async getDashboardStats() {
       await delay();
       await syncDashboardCollections();
@@ -865,6 +907,22 @@ export function createMockApi(getActor) {
 
     async getClassFeeSettings() {
       await delay();
+      await tryMergeCollectionIntoDb('class_fee_settings', (id, data) => {
+        const cls = String(data?.Class ?? id ?? '').trim();
+        if (!cls) return;
+        if (!DB.class_fee_settings) DB.class_fee_settings = [];
+        const list = DB.class_fee_settings;
+        const i = list.findIndex((x) => String(x.Class) === cls);
+        const row = {
+          Class: cls,
+          Amount: data?.Amount != null && data?.Amount !== '' ? Number(data.Amount) : '',
+          Fee_Type: String(data?.Fee_Type || PN.ADMIN_CLASS_FEE_TYPE),
+          Note: data?.Note || '',
+          Updated_At: data?.Updated_At || '',
+        };
+        if (i === -1) list.push(row);
+        else Object.assign(list[i], row);
+      });
       const classes = uniqueClassesFromDb();
       const map = new Map((DB.class_fee_settings || []).map((x) => [String(x.Class), x]));
       return classes.map((c) => {
@@ -898,6 +956,18 @@ export function createMockApi(getActor) {
       };
       if (i === -1) list.push(row);
       else Object.assign(list[i], row);
+      saveLocalDbFromMemory();
+
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          await setDoc(doc(fb.db, 'class_fee_settings', cls), row, { merge: true });
+        } catch (e) {
+          console.error('[Firestore Sync Error] class_fee_settings', e);
+          return { ok: true, msg: `Saved locally, but Firestore sync failed: ${e?.message || e}` };
+        }
+      }
+
       const sync = syncAdminClassFeeToStudents(cls, amount, feeType);
       audit('class_fee_setting_save', { class: cls, amount, feeType, ...sync });
       return {
@@ -914,7 +984,10 @@ export function createMockApi(getActor) {
         if (i === -1) DB.fees.push(row);
         else Object.assign(DB.fees[i], row);
       });
-      return [...DB.fees];
+      return DB.fees.map((f) => {
+        const st = DB.students.find((s) => s.Student_ID === f.Student_ID);
+        return { ...f, Roll_No: st?.Roll_No ?? null };
+      });
     },
     async getPendingFees() {
       await delay();
@@ -942,7 +1015,10 @@ export function createMockApi(getActor) {
     },
     async getAllMarks() {
       await delay();
-      return [...DB.marks];
+      return DB.marks.map((m) => {
+        const st = DB.students.find((s) => String(s.Student_ID) === String(m.Student_ID));
+        return { ...m, Roll_No: st?.Roll_No ?? m.Roll_No ?? null };
+      });
     },
     /** Admin marks matrix + future Firebase: return same shape { students, marks } */
     async getMarksAdminData() {
@@ -1448,6 +1524,17 @@ export function createMockApi(getActor) {
           Remarks: rec.remarks || '',
         });
       });
+      saveLocalDbFromMemory();
+      const fb1 = firebaseReady();
+      if (fb1) {
+        try {
+          await Promise.all(
+            DB.att_stu
+              .filter((a) => a.Date === dateStr && String(a.Class) === cls && String(a.Section ?? '') === sec)
+              .map((a) => setDoc(doc(fb1.db, 'student_attendance', `${a.Student_ID}__${a.Date.replace(/\//g, '-')}`), a, { merge: true }))
+          );
+        } catch (e) { console.error('[Firestore Sync Error] student_attendance', e); }
+      }
       audit('student_attendance', { dateStr, class: cls, section: sec, count: records.length });
       PN.notifyAbsentForAttendance(DB, audit, SCHOOL_NAME, records, dateStr);
       return { ok: true, msg: records.length + ' students attendance saved!' };
@@ -1472,14 +1559,67 @@ export function createMockApi(getActor) {
       });
       return map;
     },
-    async getStudentAttendanceSummary(studentId) {
+    async getStudentAttendanceSummary(query) {
       await delay();
-      const recs = DB.att_stu.filter((a) => String(a.Student_ID).toLowerCase() === String(studentId).trim().toLowerCase());
+      const q = String(query || '').trim().toLowerCase();
+      // Resolve student: match by Student_ID, Name, or Roll_No
+      let student = DB.students.find(
+        (s) =>
+          String(s.Student_ID).toLowerCase() === q ||
+          String(s.Name).toLowerCase() === q ||
+          String(s.Roll_No) === q
+      );
+      // Partial name match fallback
+      if (!student) student = DB.students.find((s) => String(s.Name).toLowerCase().includes(q));
+      const sid = student ? student.Student_ID : q;
+      const recs = DB.att_stu.filter((a) => String(a.Student_ID).toLowerCase() === String(sid).toLowerCase());
       const present = recs.filter((r) => r.Status === 'Present').length;
       const absent = recs.filter((r) => r.Status === 'Absent').length;
       const late = recs.filter((r) => r.Status === 'Late').length;
       const total = recs.length;
-      return { total, present, absent, late, pct: total ? ((present / total) * 100).toFixed(1) : '0.0' };
+      return {
+        total, present, absent, late,
+        pct: total ? ((present / total) * 100).toFixed(1) : '0.0',
+        studentName: student?.Name || null,
+        studentId: student?.Student_ID || q,
+        class: student?.Class || null,
+        section: student?.Section || null,
+        rollNo: student?.Roll_No || null,
+      };
+    },
+    async getClassAttendanceSummary(cls, sec) {
+      await delay();
+      const students = DB.students.filter(
+        (s) => String(s.Class) === String(cls) && (!sec || s.Section === sec) && s.Status === 'Active'
+      );
+      // Collect all unique dates for this class
+      const classRecs = DB.att_stu.filter(
+        (a) => String(a.Class) === String(cls) && (!sec || a.Section === sec)
+      );
+      const allDates = [...new Set(classRecs.map((a) => a.Date))].sort((a, b) => {
+        // sort dates DD/MM/YYYY
+        const parse = (d) => { const p = d.split('/'); return new Date(p[2], p[1]-1, p[0]); };
+        return parse(a) - parse(b);
+      });
+      const rows = students.map((s) => {
+        const recs = DB.att_stu.filter((a) => String(a.Student_ID) === String(s.Student_ID));
+        const present = recs.filter((r) => r.Status === 'Present').length;
+        const absent = recs.filter((r) => r.Status === 'Absent').length;
+        const late = recs.filter((r) => r.Status === 'Late').length;
+        const total = recs.length;
+        // day-wise status map: date -> P/A/L
+        const dayMap = {};
+        recs.forEach((r) => { dayMap[r.Date] = r.Status === 'Present' ? 'P' : r.Status === 'Absent' ? 'A' : 'L'; });
+        return {
+          studentId: s.Student_ID,
+          name: s.Name,
+          rollNo: s.Roll_No,
+          total, present, absent, late,
+          pct: total ? ((present / total) * 100).toFixed(1) : '0.0',
+          dayMap,
+        };
+      });
+      return { rows, dates: allDates };
     },
     async markTeacherAttendance(records, dateStr) {
       await delay();
@@ -1495,6 +1635,17 @@ export function createMockApi(getActor) {
           Remarks: rec.remarks || '',
         });
       });
+      saveLocalDbFromMemory();
+      const fbTch = firebaseReady();
+      if (fbTch) {
+        try {
+          await Promise.all(
+            DB.att_tch
+              .filter((a) => a.Date === dateStr)
+              .map((a) => setDoc(doc(fbTch.db, 'teacher_attendance', `${a.Teacher_ID}__${a.Date.replace(/\//g, '-')}`), a, { merge: true }))
+          );
+        } catch (e) { console.error('[Firestore Sync Error] teacher_attendance', e); }
+      }
       audit('teacher_attendance', { dateStr, count: records.length });
       return { ok: true, msg: 'Teacher attendance saved!' };
     },
@@ -1592,6 +1743,53 @@ export function createMockApi(getActor) {
 
       return { ok: true, msg: 'Fee record saved!', id, receipt: rcpt };
     },
+    async updateFeeRecord(feeId, d) {
+      await delay();
+      const fee = DB.fees.find((f) => f.Fee_ID === feeId);
+      if (!fee) return { ok: false, msg: 'Fee record not found.' };
+
+      const nextStatus = String(d?.status || fee.Status || 'Pending');
+      const nextType = String(d?.feeType || fee.Fee_Type || '').trim();
+      if (!nextType) return { ok: false, msg: 'Fee type is required.' };
+
+      fee.Student_Name = d?.studentName != null ? String(d.studentName) : fee.Student_Name;
+      fee.Class = d?.cls != null ? String(d.cls) : fee.Class;
+      fee.Fee_Type = nextType;
+      fee.Amount = d?.amount != null ? Number(d.amount) || 0 : fee.Amount;
+      fee.Due_Date = d?.dueDate != null ? String(d.dueDate) : fee.Due_Date;
+      fee.Remarks = d?.remarks != null ? String(d.remarks) : fee.Remarks;
+      fee.Status = nextStatus;
+
+      if (nextStatus === 'Paid') {
+        if (!fee.Paid_Date) {
+          const today = new Date();
+          const dd = String(today.getDate()).padStart(2, '0');
+          const mm = String(today.getMonth() + 1).padStart(2, '0');
+          fee.Paid_Date = d?.paidDate || `${dd}/${mm}/${today.getFullYear()}`;
+        } else if (d?.paidDate) {
+          fee.Paid_Date = String(d.paidDate);
+        }
+        if (!fee.Receipt_No) {
+          fee.Receipt_No = 'RCP' + Date.now().toString().slice(-7);
+        }
+      } else {
+        fee.Paid_Date = '';
+        fee.Receipt_No = '';
+      }
+
+      saveLocalDbFromMemory();
+
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          await setDoc(doc(fb.db, 'fees', feeId), fee, { merge: true });
+        } catch (e) {
+          console.error('[Firestore Update Error] fees', e);
+          return { ok: true, msg: `Updated locally, but Firestore sync failed: ${e?.message || e}` };
+        }
+      }
+      return { ok: true, msg: 'Fee record updated successfully!' };
+    },
     async deleteFeeRecord(feeId) {
       await delay();
       const i = DB.fees.findIndex((f) => f.Fee_ID === feeId);
@@ -1684,6 +1882,12 @@ export function createMockApi(getActor) {
         Pass_Marks: Number(d.passMarks) || 33,
       };
       DB.exams.push(exam);
+      saveLocalDbFromMemory();
+      const fbEx = firebaseReady();
+      if (fbEx) {
+        try { await setDoc(doc(fbEx.db, 'exams', id), exam, { merge: true }); }
+        catch (e) { console.error('[Firestore Sync Error] exams', e); }
+      }
       PN.notifyExamForClass(DB, audit, SCHOOL_NAME, exam);
       return { ok: true, msg: 'Exam added successfully!', examId: id };
     },
@@ -1692,6 +1896,12 @@ export function createMockApi(getActor) {
       const i = DB.exams.findIndex((e) => e.Exam_ID === examId);
       if (i === -1) return { ok: false, msg: 'Exam not found' };
       DB.exams.splice(i, 1);
+      saveLocalDbFromMemory();
+      const fbExDel = firebaseReady();
+      if (fbExDel) {
+        try { await deleteDoc(doc(fbExDel.db, 'exams', examId)); }
+        catch (e) { console.error('[Firestore Delete Error] exams', e); }
+      }
       return { ok: true, msg: 'Exam deleted!' };
     },
     async addMarks(d) {
@@ -1714,6 +1924,12 @@ export function createMockApi(getActor) {
         Grade: grade,
         Result: result,
       });
+      saveLocalDbFromMemory();
+      const fbMrk = firebaseReady();
+      if (fbMrk) {
+        try { await setDoc(doc(fbMrk.db, 'marks', id), DB.marks[DB.marks.length - 1], { merge: true }); }
+        catch (e) { console.error('[Firestore Sync Error] marks', e); }
+      }
       audit('marks_add', { studentId: d.studentId, subject: d.subject });
       return { ok: true, msg: 'Marks saved!', grade, result, pct: pct.toFixed(1) };
     },
@@ -1722,6 +1938,12 @@ export function createMockApi(getActor) {
       const i = DB.marks.findIndex((m) => m.Mark_ID === markId);
       if (i === -1) return { ok: false, msg: 'Entry not found' };
       DB.marks.splice(i, 1);
+      saveLocalDbFromMemory();
+      const fbMrkDel = firebaseReady();
+      if (fbMrkDel) {
+        try { await deleteDoc(doc(fbMrkDel.db, 'marks', markId)); }
+        catch (e) { console.error('[Firestore Delete Error] marks', e); }
+      }
       audit('marks_delete', { markId });
       return { ok: true, msg: 'Mark entry deleted!' };
     },
@@ -1774,7 +1996,11 @@ export function createMockApi(getActor) {
       await delay();
       const actor = actorFn();
       if (!actor || (actor.role !== 'admin' && actor.role !== 'teacher')) return [];
-      return [...DB.timetables].sort((a, b) => String(a.Entry_ID).localeCompare(String(b.Entry_ID)));
+      return [...DB.timetables].sort((a, b) => {
+        const aKey = String(a.Created_At || a.Entry_ID || '');
+        const bKey = String(b.Created_At || b.Entry_ID || '');
+        return bKey.localeCompare(aKey);
+      });
     },
     async addTimetable(d) {
       await delay();
@@ -1793,9 +2019,48 @@ export function createMockApi(getActor) {
         Room: d.room || '',
         Subject: d.subject || '',
         Notes: d.notes || '',
+        Created_By_UID: actor.uid || '',
+        Created_By_Email: actor.email || '',
+        Created_By_Role: actor.role || '',
+        Created_At: new Date().toISOString(),
       });
+      saveLocalDbFromMemory();
+      const fbTt = firebaseReady();
+      if (fbTt) {
+        try { await setDoc(doc(fbTt.db, 'timetables', id), DB.timetables[DB.timetables.length - 1], { merge: true }); }
+        catch (e) { console.error('[Firestore Sync Error] timetables', e); }
+      }
       audit('timetable_add', { id });
       return { ok: true, msg: 'Timetable entry added!', id };
+    },
+    async updateTimetable(entryId, d) {
+      await delay();
+      const actor = actorFn();
+      if (!actor || actor.role !== 'admin') return { ok: false, msg: 'Admin only' };
+      const i = DB.timetables.findIndex((x) => x.Entry_ID === entryId);
+      if (i === -1) return { ok: false, msg: 'Not found' };
+      const row = DB.timetables[i];
+      Object.assign(row, {
+        Type: d.type ?? row.Type,
+        Title: d.title ?? row.Title,
+        Class: d.cls !== undefined ? String(d.cls || '') : row.Class,
+        Section: d.section !== undefined ? String(d.section || '') : row.Section,
+        Day: d.day !== undefined ? d.day : row.Day,
+        Event_Date: d.eventDate !== undefined ? d.eventDate : row.Event_Date,
+        Time_Slot: d.timeSlot !== undefined ? d.timeSlot : row.Time_Slot,
+        Room: d.room !== undefined ? d.room : row.Room,
+        Subject: d.subject !== undefined ? d.subject : row.Subject,
+        Notes: d.notes !== undefined ? d.notes : row.Notes,
+        Updated_At: new Date().toISOString(),
+      });
+      saveLocalDbFromMemory();
+      const fbTtU = firebaseReady();
+      if (fbTtU) {
+        try { await setDoc(doc(fbTtU.db, 'timetables', entryId), DB.timetables[i], { merge: true }); }
+        catch (e) { console.error('[Firestore Sync Error] timetables update', e); }
+      }
+      audit('timetable_update', { entryId });
+      return { ok: true, msg: 'Timetable entry updated!' };
     },
     async deleteTimetable(entryId) {
       await delay();
@@ -1804,6 +2069,12 @@ export function createMockApi(getActor) {
       const i = DB.timetables.findIndex((x) => x.Entry_ID === entryId);
       if (i === -1) return { ok: false, msg: 'Not found' };
       DB.timetables.splice(i, 1);
+      saveLocalDbFromMemory();
+      const fbTtDel = firebaseReady();
+      if (fbTtDel) {
+        try { await deleteDoc(doc(fbTtDel.db, 'timetables', entryId)); }
+        catch (e) { console.error('[Firestore Delete Error] timetables', e); }
+      }
       audit('timetable_delete', { entryId });
       return { ok: true, msg: 'Removed' };
     },
@@ -1957,6 +2228,12 @@ export function createMockApi(getActor) {
         Due_Date: d.dueDate || '',
         Created_At: new Date().toISOString(),
       });
+      saveLocalDbFromMemory();
+      const fbHw = firebaseReady();
+      if (fbHw) {
+        try { await setDoc(doc(fbHw.db, 'homework', id), DB.homework[DB.homework.length - 1], { merge: true }); }
+        catch (e) { console.error('[Firestore Sync Error] homework', e); }
+      }
       audit('homework_add', { id, cls, sec });
       return { ok: true, msg: 'Homework posted!', id };
     },
@@ -1976,6 +2253,12 @@ export function createMockApi(getActor) {
         Class: d.cls || hw.Class,
         Section: d.section || hw.Section,
       });
+      saveLocalDbFromMemory();
+      const fbHwU = firebaseReady();
+      if (fbHwU) {
+        try { await setDoc(doc(fbHwU.db, 'homework', id), hw, { merge: true }); }
+        catch (e) { console.error('[Firestore Sync Error] homework update', e); }
+      }
       return { ok: true, msg: 'Homework updated!' };
     },
     async deleteHomework(id) {
@@ -1986,6 +2269,12 @@ export function createMockApi(getActor) {
       if (i === -1) return { ok: false, msg: 'Not found' };
       if (DB.homework[i].Teacher_ID !== actor.teacherId) return { ok: false, msg: 'Permission denied' };
       DB.homework.splice(i, 1);
+      saveLocalDbFromMemory();
+      const fbHwDel = firebaseReady();
+      if (fbHwDel) {
+        try { await deleteDoc(doc(fbHwDel.db, 'homework', id)); }
+        catch (e) { console.error('[Firestore Delete Error] homework', e); }
+      }
       return { ok: true, msg: 'Homework deleted' };
     },
     async getHolidays() {
@@ -2012,6 +2301,12 @@ export function createMockApi(getActor) {
         End_Date: ed,
       };
       DB.holidays.push(row);
+      saveLocalDbFromMemory();
+      const fbHol = firebaseReady();
+      if (fbHol) {
+        try { await setDoc(doc(fbHol.db, 'holidays', id), row, { merge: true }); }
+        catch (e) { console.error('[Firestore Sync Error] holidays', e); }
+      }
       PN.broadcastHolidayDates(DB, audit, SCHOOL_NAME, row);
       audit('holiday_add', { id, sd, ed });
       return { ok: true, msg: 'Holiday saved. Parents notified (mock WhatsApp queue).', id };
@@ -2023,6 +2318,12 @@ export function createMockApi(getActor) {
       const i = DB.holidays.findIndex((h) => h.Holiday_ID === holidayId);
       if (i === -1) return { ok: false, msg: 'Not found' };
       DB.holidays.splice(i, 1);
+      saveLocalDbFromMemory();
+      const fbHolDel = firebaseReady();
+      if (fbHolDel) {
+        try { await deleteDoc(doc(fbHolDel.db, 'holidays', holidayId)); }
+        catch (e) { console.error('[Firestore Delete Error] holidays', e); }
+      }
       audit('holiday_delete', { holidayId });
       return { ok: true, msg: 'Holiday removed.' };
     },
@@ -2068,6 +2369,12 @@ export function createMockApi(getActor) {
         to,
         lastSent: DB.whatsapp_schedule?.lastSent || '',
       };
+      saveLocalDbFromMemory();
+      const fbWa = firebaseReady();
+      if (fbWa) {
+        try { await setDoc(doc(fbWa.db, 'settings', 'whatsapp_schedule'), DB.whatsapp_schedule, { merge: true }); }
+        catch (e) { console.error('[Firestore Sync Error] whatsapp_schedule', e); }
+      }
       audit('wa_schedule_save', { time, toMasked: to ? to.replace(/^(\d{2})(.*)(\d{2})$/, '$1***$3') : '' });
       return { ok: true, msg: 'Schedule saved in mock backend.' };
     },
@@ -2079,6 +2386,12 @@ export function createMockApi(getActor) {
         ...(DB.whatsapp_schedule || { time: '', message: '', to: '' }),
         enabled: Boolean(enabled),
       };
+      saveLocalDbFromMemory();
+      const fbWaT = firebaseReady();
+      if (fbWaT) {
+        try { await setDoc(doc(fbWaT.db, 'settings', 'whatsapp_schedule'), DB.whatsapp_schedule, { merge: true }); }
+        catch (e) { console.error('[Firestore Sync Error] whatsapp_schedule toggle', e); }
+      }
       audit('wa_schedule_toggle', { enabled: Boolean(enabled) });
       return { ok: true, msg: enabled ? 'Schedule enabled.' : 'Schedule paused.' };
     },
@@ -2097,6 +2410,7 @@ export function createMockApi(getActor) {
         refId: 'manual_schedule',
       });
       cfg.lastSent = new Date().toISOString();
+      saveLocalDbFromMemory();
       audit('wa_schedule_run', { toMasked: cfg.to.replace(/^(\d{2})(.*)(\d{2})$/, '$1***$3'), at: cfg.lastSent });
       return { ok: true, msg: 'Queued one scheduled WhatsApp (mock).', lastSent: cfg.lastSent };
     },
@@ -2180,6 +2494,12 @@ export function createMockApi(getActor) {
       if (!rec) return { ok: false, msg: 'Record not found' };
       rec.Status = 'Paid';
       rec.Paid_Date = new Date().toLocaleDateString('en-IN');
+      saveLocalDbFromMemory();
+      const fbSalP = firebaseReady();
+      if (fbSalP) {
+        try { await setDoc(doc(fbSalP.db, 'salaries', salaryId), rec, { merge: true }); }
+        catch (e) { console.error('[Firestore Sync Error] salaries markPaid', e); }
+      }
       audit('salary_paid', { salaryId });
       return { ok: true, msg: `Salary marked as Paid for ${rec.Name} (${rec.Month} ${rec.Year})` };
     },
@@ -2203,6 +2523,12 @@ export function createMockApi(getActor) {
         Paid_Date: d.status === 'Paid' ? new Date().toLocaleDateString('en-IN') : '',
         Remarks: d.remarks || '',
       });
+      saveLocalDbFromMemory();
+      const fbSal = firebaseReady();
+      if (fbSal) {
+        try { await setDoc(doc(fbSal.db, 'salaries', id), DB.salaries[DB.salaries.length - 1], { merge: true }); }
+        catch (e) { console.error('[Firestore Sync Error] salaries', e); }
+      }
       audit('salary_add', { id });
       return { ok: true, msg: 'Salary record added!', id };
     },
@@ -2213,6 +2539,12 @@ export function createMockApi(getActor) {
       const i = DB.salaries.findIndex((s) => s.Salary_ID === salaryId);
       if (i === -1) return { ok: false, msg: 'Not found' };
       DB.salaries.splice(i, 1);
+      saveLocalDbFromMemory();
+      const fbSalDel = firebaseReady();
+      if (fbSalDel) {
+        try { await deleteDoc(doc(fbSalDel.db, 'salaries', salaryId)); }
+        catch (e) { console.error('[Firestore Delete Error] salaries', e); }
+      }
       audit('salary_delete', { salaryId });
       return { ok: true, msg: 'Deleted.' };
     },
@@ -2248,7 +2580,7 @@ export function createMockApi(getActor) {
         Section: d.section || '',
         Priority: d.priority || 'Normal',
         Teacher_UID: actor.uid || '',
-        Teacher_ID: d.teacherId || '',
+        Teacher_ID: d.teacherId || actor.teacherId || '',
         Teacher_Name: d.teacherName || '',
         Posted_At: new Date().toISOString(),
       };
@@ -2307,4 +2639,21 @@ export function createMockApi(getActor) {
       return { ok: true, msg: 'Removed.' };
     },
   };
+
+  // ── Auto-save proxy ────────────────────────────────────────────────────
+  // Wraps every API method so saveLocalDbFromMemory() is always called after
+  // the method resolves — even for methods added in the future.
+  // Developers never need to call saveLocalDbFromMemory() manually in new
+  // functions; the proxy handles it automatically.
+  return new Proxy(api, {
+    get(target, prop) {
+      const val = target[prop];
+      if (typeof val !== 'function') return val;
+      return async (...args) => {
+        const result = await val.apply(target, args);
+        saveLocalDbFromMemory();
+        return result;
+      };
+    },
+  });
 }
