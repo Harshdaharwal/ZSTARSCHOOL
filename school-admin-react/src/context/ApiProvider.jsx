@@ -6,6 +6,43 @@ import { createMockApi } from '../services/mockBackend.js';
 import { enqueueOp, getAllOps, removeOp, countOps } from '../services/offlineQueue.js';
 import { useAuth } from '../hooks/useAuth.js';
 
+const FEE_READ_METHODS = new Set(['getAllFees', 'getPendingFees', 'getPaidFees']);
+
+function pickFirst(obj, keys) {
+  if (!obj || typeof obj !== 'object') return undefined;
+  for (const k of keys) {
+    if (obj[k] != null && obj[k] !== '') return obj[k];
+  }
+  return undefined;
+}
+
+function normalizeFeeRecord(raw) {
+  const f = raw && typeof raw === 'object' ? raw : {};
+  return {
+    ...f,
+    Fee_ID: pickFirst(f, ['Fee_ID', 'FeeId', 'feeId', 'fee_id', 'id', 'ID']),
+    Student_ID: pickFirst(f, ['Student_ID', 'StudentId', 'studentId', 'student_id', 'SID']),
+    Student_Name: pickFirst(f, ['Student_Name', 'StudentName', 'studentName', 'student_name', 'Name', 'Student']),
+    Class: pickFirst(f, ['Class', 'class', 'Cls', 'cls']),
+    Fee_Type: pickFirst(f, ['Fee_Type', 'FeeType', 'feeType', 'fee_type', 'Type']),
+    Amount: pickFirst(f, ['Amount', 'amount', 'Amt', 'amt']),
+    Due_Date: pickFirst(f, ['Due_Date', 'DueDate', 'dueDate', 'due_date', 'Due']),
+    Paid_Date: pickFirst(f, ['Paid_Date', 'PaidDate', 'paidDate', 'paid_date', 'Paid']),
+    Status: pickFirst(f, ['Status', 'status']),
+    Receipt_No: pickFirst(f, ['Receipt_No', 'ReceiptNo', 'receiptNo', 'receipt_no', 'Receipt']),
+    Remarks: pickFirst(f, ['Remarks', 'remarks', 'Note', 'note']) ?? '',
+  };
+}
+
+function unwrapArray(result) {
+  if (Array.isArray(result)) return result;
+  if (result && typeof result === 'object') {
+    const maybe = pickFirst(result, ['data', 'fees', 'rows', 'items', 'result']);
+    if (Array.isArray(maybe)) return maybe;
+  }
+  return null;
+}
+
 /**
  * Write methods that should be queued when offline.
  * Read methods (get*, dashboard*) are skipped — they will just fail gracefully.
@@ -140,7 +177,21 @@ export function ApiProvider({ children }) {
           if (typeof fn !== 'function') return Promise.resolve(undefined);
 
           // Online → call directly
-          if (navigator.onLine) return fn(...args);
+          const normalizeResult = (result) => {
+            if (!FEE_READ_METHODS.has(method)) return result;
+            const arr = unwrapArray(result);
+            if (!arr) {
+              if (result && typeof result === 'object' && result.ok === false) {
+                console.warn(`[API] ${String(method)} failed:`, result);
+              } else {
+                console.warn(`[API] ${String(method)} unexpected response:`, result);
+              }
+              return [];
+            }
+            return arr.map(normalizeFeeRecord);
+          };
+
+          if (navigator.onLine) return Promise.resolve(fn(...args)).then(normalizeResult);
 
           // Offline + write method → queue and return optimistic success
           if (WRITE_METHODS.has(method)) {
@@ -151,9 +202,11 @@ export function ApiProvider({ children }) {
           }
 
           // Offline + read method → attempt anyway (may fail or return stale)
-          return fn(...args).catch(() => {
-            return undefined;
-          });
+          return Promise.resolve(fn(...args))
+            .then(normalizeResult)
+            .catch(() => {
+              return undefined;
+            });
         };
       },
     }

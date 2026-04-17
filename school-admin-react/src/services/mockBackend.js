@@ -674,6 +674,34 @@ function buildReportCardPayload(query) {
 export function createMockApi(getActor) {
   const actorFn = typeof getActor === 'function' ? getActor : () => null;
 
+  function pickFirst(obj, keys) {
+    if (!obj || typeof obj !== 'object') return undefined;
+    for (const key of keys) {
+      const value = obj[key];
+      if (value !== undefined && value !== null && String(value).trim() !== '') return value;
+    }
+    return undefined;
+  }
+
+  function normalizeFeeRow(id, data) {
+    const raw = data && typeof data === 'object' ? data : {};
+    const row = {
+      ...raw,
+      Fee_ID: pickFirst(raw, ['Fee_ID', 'FeeId', 'feeId', 'fee_id']) || id,
+      Student_ID: pickFirst(raw, ['Student_ID', 'StudentId', 'studentId', 'student_id']) || '',
+      Student_Name: pickFirst(raw, ['Student_Name', 'StudentName', 'studentName', 'student_name']) || raw.Name || '',
+      Class: pickFirst(raw, ['Class', 'class', 'Cls', 'cls']) || '',
+      Fee_Type: pickFirst(raw, ['Fee_Type', 'FeeType', 'feeType', 'fee_type']) || '',
+      Amount: pickFirst(raw, ['Amount', 'amount', 'Amt', 'amt']) ?? 0,
+      Due_Date: pickFirst(raw, ['Due_Date', 'DueDate', 'dueDate', 'due_date']) || '',
+      Paid_Date: pickFirst(raw, ['Paid_Date', 'PaidDate', 'paidDate', 'paid_date']) || '',
+      Status: pickFirst(raw, ['Status', 'status']) || 'Pending',
+      Receipt_No: pickFirst(raw, ['Receipt_No', 'ReceiptNo', 'receiptNo', 'receipt_no']) || '',
+      Remarks: pickFirst(raw, ['Remarks', 'remarks', 'Note', 'note']) || '',
+    };
+    return row;
+  }
+
   function firebaseReady() {
     if (!isFirebaseConfigured()) return null;
     const fb = getFirebase();
@@ -683,8 +711,8 @@ export function createMockApi(getActor) {
   }
 
   async function tryMergeCollectionIntoDb(colName, mergeFn) {
-    const fb = getFirebase();
-    if (!isFirebaseConfigured() || !fb) return;
+    const fb = firebaseReady();
+    if (!fb) return;
     try {
       const snap = await getDocs(collection(fb.db, colName));
       snap.docs.forEach((d) => mergeFn(d.id, d.data()));
@@ -714,15 +742,91 @@ export function createMockApi(getActor) {
     seedMockDatabase();
     saveLocalDbFromMemory();
   }
+
+  let lastDashboardSyncAt = 0;
+  async function syncDashboardCollections() {
+    const now = Date.now();
+    if (now - lastDashboardSyncAt < 20_000) return;
+    lastDashboardSyncAt = now;
+
+    await Promise.all([
+      tryMergeCollectionIntoDb('students', (id, data) => {
+        const row = {
+          ...data,
+          Student_ID: (data && data.Student_ID) || id,
+          Status: (data && data.Status) || 'Active',
+        };
+        const i = DB.students.findIndex((x) => x.Student_ID === row.Student_ID);
+        if (i === -1) DB.students.push(row);
+        else Object.assign(DB.students[i], row);
+      }),
+      tryMergeCollectionIntoDb('teachers', (id, data) => {
+        const row = {
+          ...data,
+          Teacher_ID: (data && data.Teacher_ID) || id,
+          Status: (data && data.Status) || 'Active',
+        };
+        const i = DB.teachers.findIndex((x) => x.Teacher_ID === row.Teacher_ID);
+        if (i === -1) DB.teachers.push(row);
+        else Object.assign(DB.teachers[i], row);
+      }),
+      tryMergeCollectionIntoDb('classes', (id, data) => {
+        const parts = String(id).split('_');
+        const row = {
+          Class: data?.Class != null ? String(data.Class) : String(parts[0] || ''),
+          Section: data?.Section != null ? String(data.Section) : String(parts[1] || ''),
+          Class_Teacher_ID: data?.Class_Teacher_ID || '',
+          Room_No: data?.Room_No || '',
+          Total_Students: data?.Total_Students != null ? String(data.Total_Students) : (data?.Total_Students ?? '0'),
+        };
+        if (!row.Class || !row.Section) return;
+        const i = DB.classes.findIndex(
+          (x) => String(x.Class) === String(row.Class) && String(x.Section) === String(row.Section)
+        );
+        if (i === -1) DB.classes.push(row);
+        else Object.assign(DB.classes[i], row);
+      }),
+      tryMergeCollectionIntoDb('fees', (id, data) => {
+        const row = normalizeFeeRow(id, data);
+        const i = DB.fees.findIndex((x) => x.Fee_ID === row.Fee_ID);
+        if (i === -1) DB.fees.push(row);
+        else Object.assign(DB.fees[i], row);
+      }),
+      tryMergeCollectionIntoDb('student_attendance', (id, data) => {
+        const row = {
+          ...data,
+          Student_ID: data?.Student_ID || data?.StudentId || '',
+          Student_Name: data?.Student_Name || data?.StudentName || data?.studentName || '',
+          Class: data?.Class || data?.class || '',
+          Section: data?.Section || data?.section || '',
+          Date: data?.Date || data?.date || '',
+          Status: data?.Status || data?.status || '',
+          Remarks: data?.Remarks || data?.remarks || '',
+        };
+        if (!row.Student_ID || !row.Date) return;
+        const key = `${row.Student_ID}__${row.Date}__${row.Status}`;
+        const i = DB.att_stu.findIndex((x) => `${x.Student_ID}__${x.Date}__${x.Status}` === key);
+        if (i === -1) DB.att_stu.push(row);
+        else Object.assign(DB.att_stu[i], row);
+      }),
+      tryMergeCollectionIntoDb('exams', (id, data) => {
+        const row = { ...data, Exam_ID: data?.Exam_ID || id };
+        const i = DB.exams.findIndex((x) => x.Exam_ID === row.Exam_ID);
+        if (i === -1) DB.exams.push(row);
+        else Object.assign(DB.exams[i], row);
+      }),
+    ]);
+  }
   return {
     async getDashboardStats() {
       await delay();
+      await syncDashboardCollections();
       return buildDashboardStats();
     },
     async getAllStudents() {
       await delay();
       await tryMergeCollectionIntoDb('students', (id, data) => {
-        const row = { ...data, Student_ID: data.Student_ID || id };
+        const row = { ...data, Student_ID: data.Student_ID || id, Status: data.Status || 'Active' };
         const i = DB.students.findIndex((x) => x.Student_ID === row.Student_ID);
         if (i === -1) DB.students.push(row);
         else Object.assign(DB.students[i], row);
@@ -732,7 +836,7 @@ export function createMockApi(getActor) {
     async getAllTeachers() {
       await delay();
       await tryMergeCollectionIntoDb('teachers', (id, data) => {
-        const row = { ...data, Teacher_ID: data.Teacher_ID || id };
+        const row = { ...data, Teacher_ID: data.Teacher_ID || id, Status: data.Status || 'Active' };
         const i = DB.teachers.findIndex((x) => x.Teacher_ID === row.Teacher_ID);
         if (i === -1) DB.teachers.push(row);
         else Object.assign(DB.teachers[i], row);
@@ -804,14 +908,32 @@ export function createMockApi(getActor) {
     },
     async getAllFees() {
       await delay();
+      await tryMergeCollectionIntoDb('fees', (id, data) => {
+        const row = normalizeFeeRow(id, data);
+        const i = DB.fees.findIndex((x) => x.Fee_ID === row.Fee_ID);
+        if (i === -1) DB.fees.push(row);
+        else Object.assign(DB.fees[i], row);
+      });
       return [...DB.fees];
     },
     async getPendingFees() {
       await delay();
+      await tryMergeCollectionIntoDb('fees', (id, data) => {
+        const row = normalizeFeeRow(id, data);
+        const i = DB.fees.findIndex((x) => x.Fee_ID === row.Fee_ID);
+        if (i === -1) DB.fees.push(row);
+        else Object.assign(DB.fees[i], row);
+      });
       return DB.fees.filter((f) => f.Status === 'Pending');
     },
     async getPaidFees() {
       await delay();
+      await tryMergeCollectionIntoDb('fees', (id, data) => {
+        const row = normalizeFeeRow(id, data);
+        const i = DB.fees.findIndex((x) => x.Fee_ID === row.Fee_ID);
+        if (i === -1) DB.fees.push(row);
+        else Object.assign(DB.fees[i], row);
+      });
       return DB.fees.filter((f) => f.Status === 'Paid');
     },
     async getAllExams() {
@@ -1409,7 +1531,11 @@ export function createMockApi(getActor) {
       await delay();
       const id = uid('FEE');
       const rcpt = d.status === 'Paid' ? 'RCP' + Date.now().toString().slice(-7) : '';
+<<<<<<< Updated upstream
       const feeRecord = {
+=======
+      const row = {
+>>>>>>> Stashed changes
         Fee_ID: id,
         Student_ID: d.studentId,
         Student_Name: d.studentName,
@@ -1422,6 +1548,7 @@ export function createMockApi(getActor) {
         Receipt_No: rcpt,
         Remarks: d.remarks || '',
       };
+<<<<<<< Updated upstream
       DB.fees.push(feeRecord);
       saveLocalDbFromMemory();
 
@@ -1453,6 +1580,19 @@ export function createMockApi(getActor) {
               `Please pay at the school fee counter.`;
           }
           PN.queueWhatsApp(DB, audit, { to: phone, body, kind: 'fee_record', refId: id });
+=======
+      DB.fees.push(row);
+      saveLocalDbFromMemory();
+
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          await setDoc(doc(fb.db, 'fees', id), row, { merge: true });
+          return { ok: true, msg: 'Fee record saved! âœ… Saved to Firestore.', id, receipt: rcpt };
+        } catch (e) {
+          console.error('[Firestore Sync Error] fees', e);
+          return { ok: true, msg: `Fee saved locally (ID: ${id}), but Firestore sync failed: ${e?.message || e}`, id, receipt: rcpt };
+>>>>>>> Stashed changes
         }
       }
 
@@ -1463,7 +1603,17 @@ export function createMockApi(getActor) {
       const i = DB.fees.findIndex((f) => f.Fee_ID === feeId);
       if (i === -1) return { ok: false, msg: 'Record not found' };
       DB.fees.splice(i, 1);
+      saveLocalDbFromMemory();
       audit('fee_delete', { feeId });
+
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          await deleteDoc(doc(fb.db, 'fees', feeId));
+        } catch (e) {
+          console.error('[Firestore Delete Error] fees', e);
+        }
+      }
       return { ok: true, msg: 'Fee record deleted!' };
     },
     async markFeePaid(feeId) {
