@@ -24,9 +24,11 @@ const MarksResultsPage = lazy(() => import('./screens/MarksResultsPage.jsx'));
 const TeacherResultsPage = lazy(() => import('./screens/TeacherResultsPage.jsx'));
 const SettingsPage = lazy(() => import('./screens/SettingsPage.jsx'));
 const TimetablesPage = lazy(() => import('./screens/TimetablesPage.jsx'));
+const TimetableBuilderPage = lazy(() => import('./screens/TimetableBuilderPage.jsx'));
 const AnnouncementsPage = lazy(() => import('./screens/AnnouncementsPage.jsx'));
 const SalaryPage = lazy(() => import('./screens/SalaryPage.jsx'));
 const ClassAnnouncementsPage = lazy(() => import('./screens/ClassAnnouncementsPage.jsx'));
+const TeacherPortalPage = lazy(() => import('./screens/TeacherPortalPage.jsx'));
 
 /** Browser history in dev; hash routes in production so static hosts (e.g. Live Server) work without SPA fallback. */
 const Router = import.meta.env.PROD ? HashRouter : BrowserRouter;
@@ -127,9 +129,7 @@ export default function App() {
                     path="/exams"
                     element={
                       <Suspense fallback={<SuspenseFallback />}>
-                        <RequireAdmin>
-                          <ExamsPage />
-                        </RequireAdmin>
+                        <ExamsPage />
                       </Suspense>
                     }
                   />
@@ -137,17 +137,16 @@ export default function App() {
                     path="/marks"
                     element={
                       <Suspense fallback={<SuspenseFallback />}>
-                        <RequireAdmin>
-                          <MarksResultsPage />
-                        </RequireAdmin>
+                        <MarksResultsPage />
                       </Suspense>
                     }
                   />
+                  <Route path="/results" element={<Navigate to="/exams" replace />} />
                   <Route
-                    path="/results"
+                    path="/teacher-portal"
                     element={
                       <Suspense fallback={<SuspenseFallback />}>
-                        <TeacherResultsPage />
+                        <TeacherPortalPage />
                       </Suspense>
                     }
                   />
@@ -174,6 +173,14 @@ export default function App() {
                     element={
                       <Suspense fallback={<SuspenseFallback />}>
                         <TimetablesPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/timetable-builder"
+                    element={
+                      <Suspense fallback={<SuspenseFallback />}>
+                        <TimetableBuilderPage />
                       </Suspense>
                     }
                   />

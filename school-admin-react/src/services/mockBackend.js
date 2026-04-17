@@ -1017,15 +1017,27 @@ export function createMockApi(getActor) {
       await delay();
       return DB.marks.map((m) => {
         const st = DB.students.find((s) => String(s.Student_ID) === String(m.Student_ID));
-        return { ...m, Roll_No: st?.Roll_No ?? m.Roll_No ?? null };
+        const ex = DB.exams.find((e) => e.Exam_ID === m.Exam_ID);
+        return {
+          ...m,
+          Roll_No: st?.Roll_No ?? m.Roll_No ?? null,
+          Student_ID: m.Student_ID,
+          Exam_Name: ex?.Exam_Name ?? '',
+          Exam_Type: ex?.Exam_Type ?? '',
+          Exam_Date: ex?.Exam_Date ?? '',
+        };
       });
     },
-    /** Admin marks matrix + future Firebase: return same shape { students, marks } */
+    /** Admin marks matrix + future Firebase: return same shape { students, marks, exams } */
     async getMarksAdminData() {
       await delay();
       return {
         students: DB.students.map((s) => ({ ...s })),
-        marks: [...DB.marks],
+        marks: DB.marks.map((m) => {
+          const ex = DB.exams.find((e) => e.Exam_ID === m.Exam_ID);
+          return { ...m, Exam_Name: ex?.Exam_Name ?? '', Exam_Type: ex?.Exam_Type ?? '', Exam_Date: ex?.Exam_Date ?? '' };
+        }),
+        exams: [...DB.exams],
       };
     },
     /** Teacher view: giving full access as requested. */
@@ -1043,7 +1055,11 @@ export function createMockApi(getActor) {
       // Return everything so teacher can select any class
       return {
         students: DB.students.map((s) => ({ ...s })),
-        marks: [...DB.marks],
+        marks: DB.marks.map((m) => {
+          const ex = DB.exams.find((e) => e.Exam_ID === m.Exam_ID);
+          return { ...m, Exam_Name: ex?.Exam_Name ?? '', Exam_Type: ex?.Exam_Type ?? '', Exam_Date: ex?.Exam_Date ?? '' };
+        }),
+        exams: [...DB.exams],
         meta: { class: t.Class_Assigned, section: t.Section_Assigned, teacherName: t.Name },
       };
     },
@@ -1875,9 +1891,11 @@ export function createMockApi(getActor) {
       const exam = {
         Exam_ID: id,
         Exam_Name: d.examName,
+        Exam_Type: d.examType || 'Exam',
         Class: String(d.cls),
         Subject: d.subject,
         Exam_Date: d.date || '',
+        Exam_Time: d.examTime || '',
         Max_Marks: Number(d.maxMarks) || 100,
         Pass_Marks: Number(d.passMarks) || 33,
       };
@@ -1890,6 +1908,29 @@ export function createMockApi(getActor) {
       }
       PN.notifyExamForClass(DB, audit, SCHOOL_NAME, exam);
       return { ok: true, msg: 'Exam added successfully!', examId: id };
+    },
+    async updateExam(examId, d) {
+      await delay();
+      const i = DB.exams.findIndex((e) => e.Exam_ID === examId);
+      if (i === -1) return { ok: false, msg: 'Exam not found' };
+      const exam = DB.exams[i];
+      Object.assign(exam, {
+        Exam_Name: d.examName ?? exam.Exam_Name,
+        Exam_Type: d.examType ?? exam.Exam_Type,
+        Class: d.cls !== undefined ? String(d.cls) : exam.Class,
+        Subject: d.subject ?? exam.Subject,
+        Exam_Date: d.date ?? exam.Exam_Date,
+        Exam_Time: d.examTime ?? exam.Exam_Time,
+        Max_Marks: d.maxMarks !== undefined ? Number(d.maxMarks) || 100 : exam.Max_Marks,
+        Pass_Marks: d.passMarks !== undefined ? Number(d.passMarks) || 33 : exam.Pass_Marks,
+      });
+      saveLocalDbFromMemory();
+      const fbExU = firebaseReady();
+      if (fbExU) {
+        try { await setDoc(doc(fbExU.db, 'exams', examId), exam, { merge: true }); }
+        catch (e) { console.error('[Firestore Sync Error] exams update', e); }
+      }
+      return { ok: true, msg: 'Exam updated!' };
     },
     async deleteExam(examId) {
       await delay();
@@ -1932,6 +1973,25 @@ export function createMockApi(getActor) {
       }
       audit('marks_add', { studentId: d.studentId, subject: d.subject });
       return { ok: true, msg: 'Marks saved!', grade, result, pct: pct.toFixed(1) };
+    },
+    async updateMarks(markId, d) {
+      await delay();
+      const i = DB.marks.findIndex((m) => m.Mark_ID === markId);
+      if (i === -1) return { ok: false, msg: 'Mark entry not found' };
+      const max = Number(d.maxMarks) || DB.marks[i].Max_Marks;
+      const obt = Number(d.marksObtained) ?? DB.marks[i].Marks_Obtained;
+      const pct = (obt / max) * 100;
+      const grade = calcGrade(pct);
+      const result = pct >= 33 ? 'Pass' : 'Fail';
+      DB.marks[i] = { ...DB.marks[i], Marks_Obtained: obt, Max_Marks: max, Grade: grade, Result: result };
+      saveLocalDbFromMemory();
+      const fbMrk = firebaseReady();
+      if (fbMrk) {
+        try { await setDoc(doc(fbMrk.db, 'marks', markId), DB.marks[i], { merge: true }); }
+        catch (e) { console.error('[Firestore Sync Error] marks update', e); }
+      }
+      audit('marks_update', { markId });
+      return { ok: true, msg: 'Marks updated!', grade, result, pct: pct.toFixed(1) };
     },
     async deleteMark(markId) {
       await delay();

@@ -763,3 +763,326 @@ tbody tr { transition: background 0.15s; }
   /* Section header */
   .sec-hdr { flex-direction: column; align-items: flex-start; }
 }
+
+/* ════════════════════════════════════════════════════════════════════ */
+/* ── Timetable Builder ──────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════ */
+
+/* Meta bar (title + buttons) */
+.tt-meta-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.tt-meta-left { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.tt-title-input {
+  font-size: 1.15rem; font-weight: 800; color: var(--text);
+  border: none; background: transparent; outline: none;
+  border-bottom: 2px solid transparent; padding: 2px 4px;
+  transition: border-color 0.2s; font-family: inherit;
+}
+.tt-title-input:focus { border-bottom-color: var(--accent); }
+.tt-sub-input {
+  font-size: 0.85rem; font-weight: 600; color: var(--text-muted);
+  border: none; background: transparent; outline: none;
+  border-bottom: 2px solid transparent; padding: 2px 4px;
+  transition: border-color 0.2s; font-family: inherit;
+}
+.tt-sub-input:focus { border-bottom-color: var(--accent); }
+.tt-title-display { font-size: 1.15rem; font-weight: 800; color: var(--text); }
+.tt-sub-display { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
+
+/* Grid wrapper */
+.tt-grid-wrap { overflow-x: auto; padding: 0; }
+.tt-table-outer { padding: 0; min-width: 700px; }
+
+/* Timetable table */
+.tt-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+
+.tt-th-time {
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: #fff; font-weight: 800; padding: 14px 16px;
+  text-align: center; width: 90px; font-size: 0.75rem;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  position: sticky; left: 0; z-index: 3; white-space: nowrap;
+}
+.tt-th-day {
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: #fff; font-weight: 700; padding: 14px 12px;
+  text-align: center; font-size: 0.8rem;
+  letter-spacing: 0.3px; white-space: nowrap;
+  border-left: 1px solid rgba(255,255,255,0.15);
+}
+
+/* Time column */
+.tt-time-cell {
+  background: linear-gradient(180deg, #eef2ff, #e0e7ff);
+  color: #3730a3;
+  font-weight: 800;
+  font-size: 0.8rem;
+  padding: 14px 10px;
+  text-align: center;
+  white-space: nowrap;
+  border-bottom: 1px solid #c7d2fe;
+  border-right: 2px solid #a5b4fc;
+  position: sticky; left: 0; z-index: 1;
+}
+[data-theme='dark'] .tt-time-cell {
+  background: linear-gradient(180deg, #1e1b4b, #1e1b4b99);
+  color: #a5b4fc;
+  border-bottom-color: #312e81;
+  border-right-color: #4338ca;
+}
+
+/* Data cell */
+.tt-data-cell {
+  border-bottom: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  padding: 10px 10px;
+  vertical-align: top;
+  min-width: 130px;
+  transition: background 0.15s;
+}
+.tt-editable { cursor: pointer; }
+.tt-editable:hover {
+  background: rgba(79, 70, 229, 0.06);
+  outline: 2px dashed rgba(79, 70, 229, 0.4);
+  outline-offset: -2px;
+}
+
+/* Break row */
+.tt-break-row .tt-time-cell {
+  background: linear-gradient(180deg, #fef3c7, #fde68a);
+  color: #92400e;
+  border-right-color: #f59e0b;
+  border-bottom-color: #fcd34d;
+}
+[data-theme='dark'] .tt-break-row .tt-time-cell {
+  background: linear-gradient(180deg, #451a03, #78350f88);
+  color: #fcd34d;
+}
+.tt-break-cell {
+  background: linear-gradient(90deg, #fffbeb, #fef9ed);
+  color: #b45309;
+  font-weight: 700;
+  font-size: 0.78rem;
+  text-align: center;
+  padding: 10px;
+  border-bottom: 1px solid #fde68a;
+  border-left: 1px solid #fde68a;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  font-style: italic;
+}
+[data-theme='dark'] .tt-break-cell {
+  background: linear-gradient(90deg, #292524, #1c1917);
+  color: #fbbf24;
+  border-bottom-color: #44403c;
+  border-left-color: #44403c;
+}
+
+/* Cell content */
+.tt-cell-empty { color: var(--border); font-size: 0.9rem; display: block; text-align: center; }
+.tt-cell-filled {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+}
+.tt-cell-part {
+  display: block;
+  font-size: 0.78rem;
+  line-height: 1.3;
+  font-weight: 600;
+}
+.tt-part-subject { color: var(--text); font-weight: 800; font-size: 0.82rem; }
+.tt-part-teacher { color: var(--text-muted); font-size: 0.72rem; }
+.tt-part-room {
+  color: #fff; font-size: 0.68rem; font-weight: 700;
+  background: var(--accent); padding: 1px 6px;
+  border-radius: 4px; align-self: flex-start;
+}
+/* Fallback for custom fields */
+.tt-cell-part { color: var(--text-muted); }
+
+/* Legend */
+.tt-legend {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 24px; border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+.tt-legend-label { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.tt-legend-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.75rem; font-weight: 600; color: var(--text-muted);
+  background: var(--card); border: 1px solid var(--border);
+  padding: 3px 10px; border-radius: 20px;
+}
+.tt-legend-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.tt-dot-subject { background: var(--text); }
+.tt-dot-teacher { background: var(--text-muted); }
+.tt-dot-room { background: var(--accent); }
+
+/* ── Cell Edit Modal ─────────────────────────────────────────────── */
+.tt-cell-modal { max-width: 500px !important; }
+.tt-modal-title {
+  font-size: 1rem; font-weight: 800; color: var(--text);
+  margin-bottom: 20px; padding-right: 32px;
+  display: flex; align-items: center; gap: 8px;
+}
+.tt-modal-day { color: var(--accent); }
+.tt-modal-sep { color: var(--text-muted); }
+.tt-modal-slot { color: var(--text-muted); font-weight: 600; font-size: 0.9rem; }
+
+.tt-cell-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+/* ── Field Manager ──────────────────────────────────────────────────── */
+.tt-field-manager { display: flex; flex-direction: column; gap: 24px; }
+.tt-fm-header h4 { font-size: 1rem; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+.tt-fm-desc { font-size: 0.82rem; color: var(--text-muted); }
+
+.tt-field-list { display: flex; flex-direction: column; gap: 8px; }
+.tt-field-item {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 16px; transition: var(--transition);
+}
+.tt-field-item:hover { border-color: var(--accent-light); box-shadow: var(--shadow-sm); }
+
+.tt-field-display { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.tt-field-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tt-field-badge {
+  width: 28px; height: 28px; border-radius: 6px;
+  background: rgba(99, 102, 241, 0.12); color: #4f46e5;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.85rem; font-weight: 700; flex-shrink: 0;
+}
+[data-theme='dark'] .tt-field-badge { background: rgba(99,102,241,0.2); color: #a5b4fc; }
+.tt-field-label { font-weight: 700; font-size: 0.88rem; color: var(--text); }
+.tt-field-req {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  background: rgba(239,68,68,0.1); color: #dc2626;
+  padding: 2px 7px; border-radius: 4px;
+}
+[data-theme='dark'] .tt-field-req { color: #f87171; background: rgba(239,68,68,0.15); }
+.tt-field-opts { font-size: 0.75rem; color: var(--text-muted); }
+
+.tt-field-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+/* Action chips / icon buttons */
+.tt-chip-btn {
+  padding: 5px 12px; border-radius: 6px; font-size: 0.78rem; font-weight: 700;
+  cursor: pointer; border: none; font-family: inherit; transition: var(--transition);
+}
+.tt-edit-btn { background: rgba(59,130,246,0.1); color: var(--accent); }
+.tt-edit-btn:hover { background: var(--accent); color: #fff; }
+.tt-del-btn { background: rgba(239,68,68,0.08); color: #dc2626; }
+.tt-del-btn:hover { background: var(--danger); color: #fff; }
+.tt-save-btn { background: rgba(16,185,129,0.1); color: var(--success); }
+.tt-save-btn:hover { background: var(--success); color: #fff; }
+.tt-cancel-btn { background: rgba(239,68,68,0.08); color: #dc2626; }
+.tt-cancel-btn:hover { background: var(--danger); color: #fff; }
+.tt-icon-btn {
+  width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--card);
+  color: var(--text-muted); font-size: 0.85rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: var(--transition);
+}
+.tt-icon-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.tt-icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* Inline edit row inside field item */
+.tt-field-edit-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.tt-inline-input {
+  flex: 1; min-width: 120px; padding: 8px 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--card);
+  font-family: inherit; font-size: 0.85rem; color: var(--text);
+  transition: var(--transition);
+}
+.tt-inline-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+.tt-inline-select {
+  padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--card); font-family: inherit; font-size: 0.85rem;
+  color: var(--text); transition: var(--transition);
+}
+.tt-inline-select:focus { outline: none; border-color: var(--accent); }
+.tt-inline-check {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.8rem; font-weight: 600; color: var(--text-muted);
+  cursor: pointer; white-space: nowrap;
+}
+.tt-inline-check input { width: 15px; height: 15px; cursor: pointer; }
+
+.tt-no-fields {
+  text-align: center; color: var(--text-muted); padding: 24px;
+  font-size: 0.88rem; font-weight: 600; background: var(--bg);
+  border-radius: 8px; border: 1px dashed var(--border);
+}
+
+/* Add new field section */
+.tt-add-field {
+  background: var(--bg); border-radius: 12px;
+  border: 1px solid var(--border); padding: 16px 20px;
+}
+.tt-add-field h5 { font-size: 0.88rem; font-weight: 700; color: var(--text); margin-bottom: 12px; }
+.tt-add-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ── Timetable Settings (Structure) ─────────────────────────────────── */
+.tt-settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+.tt-settings-col h5 { font-size: 0.88rem; font-weight: 700; color: var(--text); margin-bottom: 12px; }
+.tt-tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; min-height: 36px; }
+.tt-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 20px;
+  background: rgba(99,102,241,0.1); color: #4f46e5;
+  border: 1px solid rgba(99,102,241,0.25);
+  font-size: 0.82rem; font-weight: 700;
+}
+[data-theme='dark'] .tt-tag {
+  background: rgba(99,102,241,0.15); color: #a5b4fc;
+  border-color: rgba(99,102,241,0.3);
+}
+.tt-tag-break {
+  background: rgba(245,158,11,0.12); color: #b45309;
+  border-color: rgba(245,158,11,0.3);
+}
+[data-theme='dark'] .tt-tag-break { color: #fbbf24; }
+.tt-tag-rm {
+  width: 16px; height: 16px; border-radius: 50%; border: none;
+  background: rgba(0,0,0,0.1); color: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.65rem; transition: var(--transition); padding: 0;
+  line-height: 1;
+}
+.tt-tag-rm:hover { background: var(--danger); color: #fff; }
+.tt-add-tag-row { display: flex; gap: 8px; }
+.tt-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 8px; }
+
+/* Section description */
+.tt-section-desc { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6; }
+
+/* ── Responsive timetable ───────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .tt-meta-bar { padding: 14px 16px 12px; }
+  .tt-title-input { font-size: 1rem; }
+  .tt-th-time, .tt-th-day { padding: 10px 8px; font-size: 0.7rem; }
+  .tt-time-cell { padding: 10px 6px; font-size: 0.72rem; }
+  .tt-data-cell { min-width: 100px; padding: 8px 6px; }
+  .tt-field-display { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .tt-settings-grid { grid-template-columns: 1fr; }
+  .tt-add-row { flex-direction: column; align-items: stretch; }
+  .tt-add-tag-row { flex-direction: column; }
+  .tt-cell-form { grid-template-columns: 1fr; }
+  .tt-legend { padding: 10px 14px; gap: 8px; }
+}
+
