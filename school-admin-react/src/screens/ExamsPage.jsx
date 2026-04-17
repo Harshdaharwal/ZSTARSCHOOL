@@ -125,7 +125,7 @@ export default function ExamsPage() {
             <CardTitle>Add Exam</CardTitle>
             <form className="form-grid" onSubmit={addExam}>
               <div className="form-group">
-                <label>Name *</label>
+                <label>Exam Name *</label>
                 <input name="nm" required />
               </div>
               <div className="form-group">
@@ -165,7 +165,7 @@ export default function ExamsPage() {
                 <thead>
                   <tr>
                     <th>ID</th>
-                    <th>Name</th>
+                    <th>Exam Name</th>
                     <th>Class</th>
                     <th>Subject</th>
                     <th />
