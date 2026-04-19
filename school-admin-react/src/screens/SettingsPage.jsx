@@ -12,6 +12,7 @@ import { SCHOOL_NAME, ACADEMIC_YEAR, WHATSAPP_DELIVERY_MODE } from '../config/sc
 import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 import { getFirebase, isFirebaseConfigured } from '../services/firebase/client.js';
 import { doc, setDoc, writeBatch, collection } from 'firebase/firestore';
+import { PaginationBar } from '../components/common/PaginationBar.jsx';
 
 /** Realistic teacher records for Springdale School, Jaipur */
 const SEED_TEACHERS = [
@@ -99,14 +100,28 @@ export default function SettingsPage() {
     lastSent: '',
   });
   const [confirm, setConfirm] = useState(null);
+  const [auditPage, setAuditPage] = useState(1);
 
   const waSupported = typeof api.getWhatsAppLog === 'function';
 
   const loadAudit = useCallback(() => {
     if (typeof api.getAuditLog !== 'function') return Promise.resolve([]);
-    return api.getAuditLog(120);
+    return api.getAuditLog(400);
   }, [api]);
   const { data: auditRows, loading, refresh } = useAsyncResource(loadAudit);
+
+  const AUDIT_PAGE_SIZE = 15;
+  const auditTotal = (auditRows || []).length;
+  const auditTotalPages = Math.max(1, Math.ceil(auditTotal / AUDIT_PAGE_SIZE));
+  const currentAuditPage = Math.min(auditPage, auditTotalPages);
+  const pagedAuditRows = useMemo(() => {
+    const start = (currentAuditPage - 1) * AUDIT_PAGE_SIZE;
+    return (auditRows || []).slice(start, start + AUDIT_PAGE_SIZE);
+  }, [auditRows, currentAuditPage]);
+
+  useEffect(() => {
+    setAuditPage(1);
+  }, [auditRows]);
 
   const loadHolidays = useCallback(
     () => (typeof api.getHolidays === 'function' ? api.getHolidays() : Promise.resolve([])),
@@ -576,31 +591,12 @@ export default function SettingsPage() {
                 </table>
               </div>
             )}
-            {filteredWaLog.length > WA_PAGE_SIZE ? (
-              <div className="btn-row" style={{ justifyContent: 'space-between', marginTop: 12 }}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setWaPage((p) => Math.max(1, p - 1))}
-                  disabled={waCurrentPage <= 1}
-                >
-                  Previous
-                </Button>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 700 }}>
-                  Page {waCurrentPage} of {waTotalPages}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setWaPage((p) => Math.min(waTotalPages, p + 1))}
-                  disabled={waCurrentPage >= waTotalPages}
-                >
-                  Next
-                </Button>
-              </div>
-            ) : null}
+            <PaginationBar
+              page={waPage}
+              pageSize={WA_PAGE_SIZE}
+              total={filteredWaLog.length}
+              onPageChange={setWaPage}
+            />
           </>
         )}
       </Card>
@@ -686,41 +682,49 @@ export default function SettingsPage() {
         {loading && !auditRows ? (
           <Spinner />
         ) : (
-          <div className="tbl-wrap tbl-sticky-first audit-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Time (UTC)</th>
-                  <th>Actor</th>
-                  <th>Role</th>
-                  <th>Action</th>
-                  <th>Detail</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(auditRows || []).length === 0 ? (
+          <>
+            <div className="tbl-wrap tbl-sticky-first audit-table">
+              <table>
+                <thead>
                   <tr>
-                    <td colSpan={5} className="empty" style={{ padding: 24 }}>
-                      No audited actions yet. Actions like attendance saves and mark changes appear here in demo
-                      mode.
-                    </td>
+                    <th>Time (UTC)</th>
+                    <th>Actor</th>
+                    <th>Role</th>
+                    <th>Action</th>
+                    <th>Detail</th>
                   </tr>
-                ) : (
-                  (auditRows || []).map((row, i) => (
-                    <tr key={i}>
-                      <td>{esc(row.at)}</td>
-                      <td>{esc(row.actorEmail)}</td>
-                      <td>{esc(row.actorRole)}</td>
-                      <td>{esc(row.action)}</td>
-                      <td style={{ maxWidth: 320, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={row.detail}>
-                        {esc(row.detail)}
+                </thead>
+                <tbody>
+                  {pagedAuditRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="empty" style={{ padding: 24 }}>
+                        No audited actions yet. Actions like attendance saves and mark changes appear here in demo
+                        mode.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : (
+                    pagedAuditRows.map((row, i) => (
+                      <tr key={i}>
+                        <td>{esc(row.at)}</td>
+                        <td>{esc(row.actorEmail)}</td>
+                        <td>{esc(row.actorRole)}</td>
+                        <td>{esc(row.action)}</td>
+                        <td style={{ maxWidth: 320, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={row.detail}>
+                          {esc(row.detail)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <PaginationBar
+              page={auditPage}
+              pageSize={AUDIT_PAGE_SIZE}
+              total={auditTotal}
+              onPageChange={setAuditPage}
+            />
+          </>
         )}
       </Card>
 

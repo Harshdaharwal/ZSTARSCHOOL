@@ -14,7 +14,8 @@
     "firebase:update-teachers": "node scripts/firebase/updateTeacherData.mjs",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "vite build && firebase deploy --only hosting"
   },
   "dependencies": {
     "chart.js": "^4.5.1",

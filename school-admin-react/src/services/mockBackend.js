@@ -710,6 +710,11 @@ export function createMockApi(getActor) {
     return fb;
   }
 
+  /** Strip undefined/function values — Firestore rejects them */
+  function cleanForFirestore(obj) {
+    return JSON.parse(JSON.stringify(obj));
+  }
+
   async function tryMergeCollectionIntoDb(colName, mergeFn) {
     const fb = firebaseReady();
     if (!fb) return;
@@ -1130,35 +1135,38 @@ export function createMockApi(getActor) {
       const s = DB.students.find((x) => x.Student_ID === id);
       if (!s) return { ok: false, msg: 'Student not found!' };
       Object.assign(s, {
-        Name: d.name,
-        Father_Name: d.fatherName,
-        Mother_Name: d.motherName,
-        Class: String(d.cls),
-        Section: d.section,
-        DOB: d.dob,
-        Gender: d.gender,
-        Phone: d.phone,
-        Address: d.address,
-        Academic_Year: d.academicYear != null ? String(d.academicYear) : s.Academic_Year,
+        Name: d.name ?? s.Name ?? '',
+        Father_Name: d.fatherName ?? s.Father_Name ?? '',
+        Mother_Name: d.motherName ?? s.Mother_Name ?? '',
+        Class: d.cls != null ? String(d.cls) : s.Class ?? '',
+        Section: d.section ?? s.Section ?? '',
+        DOB: d.dob ?? s.DOB ?? '',
+        Gender: d.gender ?? s.Gender ?? '',
+        Phone: d.phone ?? s.Phone ?? '',
+        Address: d.address ?? s.Address ?? '',
+        Academic_Year: d.academicYear != null ? String(d.academicYear) : s.Academic_Year ?? '',
         Parent_WhatsApp:
           d.parentWhatsApp !== undefined
             ? String(d.parentWhatsApp || '')
               .replace(/\D/g, '')
               .slice(-10)
-            : s.Parent_WhatsApp,
-        Photo: d.photo !== undefined ? d.photo : s.Photo,
+            : s.Parent_WhatsApp ?? '',
+        Photo: d.photo !== undefined ? (d.photo || '') : (s.Photo || ''),
       });
       saveLocalDbFromMemory();
 
       const fb = firebaseReady();
       if (fb) {
         try {
-          await setDoc(doc(fb.db, 'students', id), { ...s }, { merge: true });
+          // Strip any undefined/function values — Firestore rejects them
+          const clean = JSON.parse(JSON.stringify(s));
+          await setDoc(doc(fb.db, 'students', id), clean, { merge: true });
         } catch (e) {
           console.error('[Firestore Update Error] students', e);
+          return { ok: true, msg: `Student updated locally, but Firestore sync failed: ${e?.message || e}` };
         }
       }
-      return { ok: true, msg: 'Student updated successfully!' };
+      return { ok: true, msg: fb ? 'Student updated successfully! ✅ Saved to Firestore.' : 'Student updated successfully!' };
     },
     async setStudentStatus(id, status) {
       await delay();
@@ -1307,16 +1315,16 @@ export function createMockApi(getActor) {
       const email = String(d.email || '').trim();
       const emailLc = email.toLowerCase();
       const updates = {
-        Name: d.name,
-        Subject: d.subject,
-        Phone: d.phone,
+        Name: d.name ?? t.Name ?? '',
+        Subject: d.subject ?? t.Subject ?? '',
+        Phone: d.phone ?? t.Phone ?? '',
         Email: email,
         Email_LC: emailLc,
-        Qualification: d.qualification,
-        Class_Assigned: d.classAssigned,
-        Section_Assigned: d.sectionAssigned,
-        Join_Date: d.joinDate != null ? d.joinDate : t.Join_Date,
-        Photo: d.photo !== undefined ? d.photo : t.Photo,
+        Qualification: d.qualification ?? t.Qualification ?? '',
+        Class_Assigned: d.classAssigned ?? t.Class_Assigned ?? '',
+        Section_Assigned: d.sectionAssigned ?? t.Section_Assigned ?? '',
+        Join_Date: d.joinDate != null ? d.joinDate : t.Join_Date ?? '',
+        Photo: d.photo !== undefined ? (d.photo || '') : (t.Photo || ''),
       };
       if (d.password) updates.Password = d.password;
       
@@ -1329,28 +1337,29 @@ export function createMockApi(getActor) {
         if (fb && fb.auth.currentUser) {
           try {
             const { Password, ...safeObj } = t;
-            await setDoc(doc(fb.db, 'teachers', id), safeObj, { merge: true });
+            await setDoc(doc(fb.db, 'teachers', id), cleanForFirestore(safeObj), { merge: true });
             if (t.Email) {
               const userDocId = t.Auth_UID || id;
               await setDoc(
                 doc(fb.db, 'users', userDocId),
-                {
+                cleanForFirestore({
                   email: t.Email,
                   email_lc: String(t.Email || '').trim().toLowerCase(),
                   role: 'teacher',
                   teacherId: id,
                   uid: t.Auth_UID || '',
-                },
+                }),
                 { merge: true }
               );
             }
           } catch (e) {
             console.error('[Firestore Update Error]', e);
+            return { ok: true, msg: `Teacher updated locally, but Firestore sync failed: ${e?.message || e}` };
           }
         }
       }
 
-      return { ok: true, msg: 'Teacher updated!' };
+      return { ok: true, msg: isFirebaseConfigured() ? 'Teacher updated! ✅ Saved to Firestore.' : 'Teacher updated!' };
     },
     async deleteTeacher(teacherId) {
       await delay();
@@ -1798,13 +1807,13 @@ export function createMockApi(getActor) {
       const fb = firebaseReady();
       if (fb) {
         try {
-          await setDoc(doc(fb.db, 'fees', feeId), fee, { merge: true });
+          await setDoc(doc(fb.db, 'fees', feeId), cleanForFirestore(fee), { merge: true });
         } catch (e) {
           console.error('[Firestore Update Error] fees', e);
           return { ok: true, msg: `Updated locally, but Firestore sync failed: ${e?.message || e}` };
         }
       }
-      return { ok: true, msg: 'Fee record updated successfully!' };
+      return { ok: true, msg: fb ? 'Fee record updated successfully! ✅ Saved to Firestore.' : 'Fee record updated successfully!' };
     },
     async deleteFeeRecord(feeId) {
       await delay();
@@ -1839,6 +1848,15 @@ export function createMockApi(getActor) {
       fee.Receipt_No = rcpt;
       saveLocalDbFromMemory();
       audit('fee_paid', { feeId, studentId: fee.Student_ID, amount: fee.Amount });
+
+      const fb = firebaseReady();
+      if (fb) {
+        try {
+          await setDoc(doc(fb.db, 'fees', feeId), cleanForFirestore(fee), { merge: true });
+        } catch (e) {
+          console.error('[Firestore Update Error] fees markPaid', e);
+        }
+      }
 
       // Send personalized WhatsApp receipt to parent
       const st = DB.students.find((s) => String(s.Student_ID) === String(fee.Student_ID));
@@ -1903,11 +1921,11 @@ export function createMockApi(getActor) {
       saveLocalDbFromMemory();
       const fbEx = firebaseReady();
       if (fbEx) {
-        try { await setDoc(doc(fbEx.db, 'exams', id), exam, { merge: true }); }
+        try { await setDoc(doc(fbEx.db, 'exams', id), cleanForFirestore(exam), { merge: true }); }
         catch (e) { console.error('[Firestore Sync Error] exams', e); }
       }
       PN.notifyExamForClass(DB, audit, SCHOOL_NAME, exam);
-      return { ok: true, msg: 'Exam added successfully!', examId: id };
+      return { ok: true, msg: fbEx ? 'Exam added successfully! ✅ Saved to Firestore.' : 'Exam added successfully!', examId: id };
     },
     async updateExam(examId, d) {
       await delay();
@@ -1927,10 +1945,13 @@ export function createMockApi(getActor) {
       saveLocalDbFromMemory();
       const fbExU = firebaseReady();
       if (fbExU) {
-        try { await setDoc(doc(fbExU.db, 'exams', examId), exam, { merge: true }); }
-        catch (e) { console.error('[Firestore Sync Error] exams update', e); }
+        try { await setDoc(doc(fbExU.db, 'exams', examId), cleanForFirestore(exam), { merge: true }); }
+        catch (e) {
+          console.error('[Firestore Sync Error] exams update', e);
+          return { ok: true, msg: `Exam updated locally, but Firestore sync failed: ${e?.message || e}` };
+        }
       }
-      return { ok: true, msg: 'Exam updated!' };
+      return { ok: true, msg: fbExU ? 'Exam updated! ✅ Saved to Firestore.' : 'Exam updated!' };
     },
     async deleteExam(examId) {
       await delay();
@@ -1968,11 +1989,11 @@ export function createMockApi(getActor) {
       saveLocalDbFromMemory();
       const fbMrk = firebaseReady();
       if (fbMrk) {
-        try { await setDoc(doc(fbMrk.db, 'marks', id), DB.marks[DB.marks.length - 1], { merge: true }); }
+        try { await setDoc(doc(fbMrk.db, 'marks', id), cleanForFirestore(DB.marks[DB.marks.length - 1]), { merge: true }); }
         catch (e) { console.error('[Firestore Sync Error] marks', e); }
       }
       audit('marks_add', { studentId: d.studentId, subject: d.subject });
-      return { ok: true, msg: 'Marks saved!', grade, result, pct: pct.toFixed(1) };
+      return { ok: true, msg: fbMrk ? 'Marks saved! ✅ Saved to Firestore.' : 'Marks saved!', grade, result, pct: pct.toFixed(1) };
     },
     async updateMarks(markId, d) {
       await delay();
@@ -1987,11 +2008,14 @@ export function createMockApi(getActor) {
       saveLocalDbFromMemory();
       const fbMrk = firebaseReady();
       if (fbMrk) {
-        try { await setDoc(doc(fbMrk.db, 'marks', markId), DB.marks[i], { merge: true }); }
-        catch (e) { console.error('[Firestore Sync Error] marks update', e); }
+        try { await setDoc(doc(fbMrk.db, 'marks', markId), cleanForFirestore(DB.marks[i]), { merge: true }); }
+        catch (e) {
+          console.error('[Firestore Sync Error] marks update', e);
+          return { ok: true, msg: `Marks updated locally, but Firestore sync failed: ${e?.message || e}`, grade, result, pct: pct.toFixed(1) };
+        }
       }
       audit('marks_update', { markId });
-      return { ok: true, msg: 'Marks updated!', grade, result, pct: pct.toFixed(1) };
+      return { ok: true, msg: fbMrk ? 'Marks updated! ✅ Saved to Firestore.' : 'Marks updated!', grade, result, pct: pct.toFixed(1) };
     },
     async deleteMark(markId) {
       await delay();
@@ -2087,11 +2111,11 @@ export function createMockApi(getActor) {
       saveLocalDbFromMemory();
       const fbTt = firebaseReady();
       if (fbTt) {
-        try { await setDoc(doc(fbTt.db, 'timetables', id), DB.timetables[DB.timetables.length - 1], { merge: true }); }
+        try { await setDoc(doc(fbTt.db, 'timetables', id), cleanForFirestore(DB.timetables[DB.timetables.length - 1]), { merge: true }); }
         catch (e) { console.error('[Firestore Sync Error] timetables', e); }
       }
       audit('timetable_add', { id });
-      return { ok: true, msg: 'Timetable entry added!', id };
+      return { ok: true, msg: fbTt ? 'Timetable entry added! ✅ Saved to Firestore.' : 'Timetable entry added!', id };
     },
     async updateTimetable(entryId, d) {
       await delay();
@@ -2116,11 +2140,14 @@ export function createMockApi(getActor) {
       saveLocalDbFromMemory();
       const fbTtU = firebaseReady();
       if (fbTtU) {
-        try { await setDoc(doc(fbTtU.db, 'timetables', entryId), DB.timetables[i], { merge: true }); }
-        catch (e) { console.error('[Firestore Sync Error] timetables update', e); }
+        try { await setDoc(doc(fbTtU.db, 'timetables', entryId), cleanForFirestore(DB.timetables[i]), { merge: true }); }
+        catch (e) {
+          console.error('[Firestore Sync Error] timetables update', e);
+          return { ok: true, msg: `Timetable updated locally, but Firestore sync failed: ${e?.message || e}` };
+        }
       }
       audit('timetable_update', { entryId });
-      return { ok: true, msg: 'Timetable entry updated!' };
+      return { ok: true, msg: fbTtU ? 'Timetable entry updated! ✅ Saved to Firestore.' : 'Timetable entry updated!' };
     },
     async deleteTimetable(entryId) {
       await delay();
@@ -2211,9 +2238,9 @@ export function createMockApi(getActor) {
       }
 
       Object.assign(ann, {
-        Title: d.title,
-        Body: d.body,
-        Priority: d.priority,
+        Title: d.title ?? ann.Title ?? '',
+        Body: d.body ?? ann.Body ?? '',
+        Priority: d.priority ?? ann.Priority ?? 'Normal',
         Attachment: d.attachment !== undefined ? d.attachment : ann.Attachment,
         Attachment_Name: d.attachmentName !== undefined ? d.attachmentName : ann.Attachment_Name,
       });
@@ -2222,13 +2249,13 @@ export function createMockApi(getActor) {
       const fb = firebaseReady();
       if (fb) {
         try {
-          await setDoc(doc(fb.db, 'announcements', id), ann, { merge: true });
+          await setDoc(doc(fb.db, 'announcements', id), cleanForFirestore(ann), { merge: true });
         } catch (e) {
           console.error('[Firestore Update Error] announcements', e);
           return { ok: true, msg: `Updated locally, but Firestore sync failed: ${e?.message || e}` };
         }
       }
-      return { ok: true, msg: 'Announcement updated!' };
+      return { ok: true, msg: fb ? 'Announcement updated! ✅ Saved to Firestore.' : 'Announcement updated!' };
     },
     async deleteAnnouncement(announcementId) {
       await delay();
@@ -2291,11 +2318,11 @@ export function createMockApi(getActor) {
       saveLocalDbFromMemory();
       const fbHw = firebaseReady();
       if (fbHw) {
-        try { await setDoc(doc(fbHw.db, 'homework', id), DB.homework[DB.homework.length - 1], { merge: true }); }
+        try { await setDoc(doc(fbHw.db, 'homework', id), cleanForFirestore(DB.homework[DB.homework.length - 1]), { merge: true }); }
         catch (e) { console.error('[Firestore Sync Error] homework', e); }
       }
       audit('homework_add', { id, cls, sec });
-      return { ok: true, msg: 'Homework posted!', id };
+      return { ok: true, msg: fbHw ? 'Homework posted! ✅ Saved to Firestore.' : 'Homework posted!', id };
     },
     async updateHomework(id, d) {
       await delay();
@@ -2306,20 +2333,23 @@ export function createMockApi(getActor) {
       if (hw.Teacher_ID !== actor.teacherId) return { ok: false, msg: 'Permission denied' };
 
       Object.assign(hw, {
-        Subject: d.subject,
-        Title: d.title,
-        Description: d.description,
-        Due_Date: d.dueDate,
+        Subject: d.subject ?? hw.Subject ?? '',
+        Title: d.title ?? hw.Title ?? '',
+        Description: d.description ?? hw.Description ?? '',
+        Due_Date: d.dueDate ?? hw.Due_Date ?? '',
         Class: d.cls || hw.Class,
         Section: d.section || hw.Section,
       });
       saveLocalDbFromMemory();
       const fbHwU = firebaseReady();
       if (fbHwU) {
-        try { await setDoc(doc(fbHwU.db, 'homework', id), hw, { merge: true }); }
-        catch (e) { console.error('[Firestore Sync Error] homework update', e); }
+        try { await setDoc(doc(fbHwU.db, 'homework', id), cleanForFirestore(hw), { merge: true }); }
+        catch (e) {
+          console.error('[Firestore Sync Error] homework update', e);
+          return { ok: true, msg: `Homework updated locally, but Firestore sync failed: ${e?.message || e}` };
+        }
       }
-      return { ok: true, msg: 'Homework updated!' };
+      return { ok: true, msg: fbHwU ? 'Homework updated! ✅ Saved to Firestore.' : 'Homework updated!' };
     },
     async deleteHomework(id) {
       await delay();
@@ -2557,11 +2587,14 @@ export function createMockApi(getActor) {
       saveLocalDbFromMemory();
       const fbSalP = firebaseReady();
       if (fbSalP) {
-        try { await setDoc(doc(fbSalP.db, 'salaries', salaryId), rec, { merge: true }); }
-        catch (e) { console.error('[Firestore Sync Error] salaries markPaid', e); }
+        try { await setDoc(doc(fbSalP.db, 'salaries', salaryId), cleanForFirestore(rec), { merge: true }); }
+        catch (e) {
+          console.error('[Firestore Sync Error] salaries markPaid', e);
+          return { ok: true, msg: `Salary marked as Paid locally, but Firestore sync failed: ${e?.message || e}` };
+        }
       }
       audit('salary_paid', { salaryId });
-      return { ok: true, msg: `Salary marked as Paid for ${rec.Name} (${rec.Month} ${rec.Year})` };
+      return { ok: true, msg: `Salary marked as Paid for ${rec.Name} (${rec.Month} ${rec.Year})${fbSalP ? ' ✅ Saved to Firestore.' : ''}` };
     },
     async addSalaryRecord(d) {
       await delay();
@@ -2586,11 +2619,11 @@ export function createMockApi(getActor) {
       saveLocalDbFromMemory();
       const fbSal = firebaseReady();
       if (fbSal) {
-        try { await setDoc(doc(fbSal.db, 'salaries', id), DB.salaries[DB.salaries.length - 1], { merge: true }); }
+        try { await setDoc(doc(fbSal.db, 'salaries', id), cleanForFirestore(DB.salaries[DB.salaries.length - 1]), { merge: true }); }
         catch (e) { console.error('[Firestore Sync Error] salaries', e); }
       }
       audit('salary_add', { id });
-      return { ok: true, msg: 'Salary record added!', id };
+      return { ok: true, msg: fbSal ? 'Salary record added! ✅ Saved to Firestore.' : 'Salary record added!', id };
     },
     async deleteSalaryRecord(salaryId) {
       await delay();

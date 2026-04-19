@@ -1,14 +1,20 @@
 /**
- * Parent WhatsApp notifications — demo / no API key.
- * Queues messages in DB.whatsapp_log; replace queueWhatsApp with a real provider later.
+ * Parent WhatsApp notifications — Maytapi integration.
+ * Sends messages via the Maytapi WhatsApp API and logs them in DB.whatsapp_log.
  */
+
+import { sendTextMessage, validateConfig } from './whatsappService.js';
 
 export const ADMIN_CLASS_FEE_TYPE = 'Class fee (admin)';
 
 export function parentPhone(student) {
   const raw = String(student?.Parent_WhatsApp || student?.Phone || '').replace(/\D/g, '');
-  if (raw.length >= 10) return raw.slice(-10);
-  return raw || '';
+  if (!raw || raw.length < 10) return '';
+  // Maytapi needs international format — prefix 91 (India) if only 10 digits
+  const digits = raw.slice(-10);
+  if (raw.length === 10) return `91${digits}`;
+  // Already has country code (e.g. 919876543210)
+  return raw;
 }
 
 /** @param {any} DB */
@@ -73,12 +79,31 @@ export function queueWhatsApp(DB, audit, { to, body, kind, refId }) {
     body,
     kind: kind || 'general',
     refId: refId || '',
-    status: 'mock_queued',
+    status: 'pending',
   };
   if (!DB.whatsapp_log) DB.whatsapp_log = [];
   DB.whatsapp_log.push(entry);
   if (DB.whatsapp_log.length > 800) DB.whatsapp_log.splice(0, DB.whatsapp_log.length - 800);
   if (typeof audit === 'function') audit('whatsapp_queued', { to, kind: entry.kind, refId: entry.refId });
+
+  // Actually send via Maytapi WhatsApp API
+  const config = validateConfig();
+  if (!config.valid) {
+    console.warn('[WhatsApp] Maytapi not configured, missing:', config.missing);
+    entry.status = 'config_missing';
+    return;
+  }
+  sendTextMessage(to, body)
+    .then((res) => {
+      entry.status = 'sent';
+      entry.apiResponse = res;
+      console.log(`[WhatsApp] Message sent to ${to} (${kind})`, res);
+    })
+    .catch((err) => {
+      entry.status = 'failed';
+      entry.error = err?.message || String(err);
+      console.error(`[WhatsApp] Failed to send to ${to}:`, err);
+    });
 }
 
 export function hasDedupe(DB, key) {
