@@ -106,7 +106,8 @@ async function main() {
   }
 
   const raw = await readFile(defaultSeedPath, 'utf8');
-  const seed = JSON.parse(raw);
+  const cleanRaw = raw.replace(/^\uFEFF/, '');
+  const seed = JSON.parse(cleanRaw);
   const serviceAccount = await loadServiceAccount(serviceAccountPath);
   const accessToken = await fetchAccessToken(serviceAccount, [
     'https://www.googleapis.com/auth/datastore',
