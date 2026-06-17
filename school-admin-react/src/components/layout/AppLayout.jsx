@@ -78,6 +78,28 @@ function MobileBottomNav({ onMoreClick, moreOpen }) {
   );
 }
 
+/* Auto-inject data-label on every td from thead, enables CSS card layout on mobile */
+function useResponsiveTables(pathname) {
+  useEffect(() => {
+    const label = () => {
+      document.querySelectorAll('.tbl-wrap table').forEach((table) => {
+        const headers = [...table.querySelectorAll('thead th')].map((th) => th.textContent.trim());
+        table.querySelectorAll('tbody tr').forEach((row) => {
+          [...row.querySelectorAll('td')].forEach((td, i) => {
+            if (headers[i] !== undefined) td.setAttribute('data-label', headers[i]);
+          });
+        });
+      });
+    };
+    // Label immediately + re-label when table content changes (async data loads)
+    label();
+    const obs = new MutationObserver(label);
+    const root = document.getElementById('main-content');
+    if (root) obs.observe(root, { childList: true, subtree: true });
+    return () => obs.disconnect();
+  }, [pathname]);
+}
+
 const AppLayout = memo(function AppLayout() {
   const loc = useLocation();
   const { t } = useTranslation();
@@ -91,6 +113,8 @@ const AppLayout = memo(function AppLayout() {
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [sidebarOpen]);
+
+  useResponsiveTables(loc.pathname);
 
   const toggleSidebar = useCallback(() => setSidebarOpen((v) => !v), []);
 

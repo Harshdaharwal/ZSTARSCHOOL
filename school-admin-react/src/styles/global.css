@@ -925,20 +925,89 @@ tbody tr { transition: background 0.15s; }
   .dash-charts { gap: 14px; }
   .dash-side-panel { height: auto; max-height: 360px; padding: 16px; border-radius: var(--mob-radius); }
 
-  /* ── Premium Tables ────────────────────────────────────────────────── */
+  /* ── Responsive Card Tables — no horizontal scroll ────────────────── */
   .tbl-wrap {
+    border: none; background: transparent;
+    box-shadow: none; border-radius: 0;
+    overflow: visible;
+  }
+
+  /* Convert table to card layout */
+  .tbl-wrap table {
+    display: block; min-width: unset !important;
+    width: 100%; border-collapse: unset;
+  }
+  .tbl-wrap thead { display: none; } /* headers replaced by data-label */
+  .tbl-wrap tbody { display: flex; flex-direction: column; gap: 10px; }
+
+  /* Each row = a card */
+  .tbl-wrap tbody tr {
+    display: block;
+    background: var(--card);
+    border: 1px solid var(--border);
     border-radius: 14px;
-    -webkit-overflow-scrolling: touch;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    transition: box-shadow 0.2s ease;
   }
-  table { font-size: 0.8rem; min-width: 480px; }
-  thead th {
-    padding: 12px 10px; font-size: 0.65rem;
-    background: linear-gradient(180deg, var(--bg) 0%, rgba(59,130,246,0.04) 100%);
+  .tbl-wrap tbody tr:active { box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+
+  /* Each cell = a labeled row inside the card */
+  .tbl-wrap tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.82rem;
+    color: var(--text);
+    min-width: 0;
+    word-break: break-word;
   }
-  tbody td { padding: 12px 10px; }
-  tbody tr { transition: all 0.2s ease; }
-  tbody tr:active { background: rgba(59,130,246,0.06); transform: scale(0.99); }
+  .tbl-wrap tbody td:last-child { border-bottom: none; }
+
+  /* Label before each cell value (from data-label injected by JS) */
+  .tbl-wrap tbody td[data-label]::before {
+    content: attr(data-label);
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    min-width: 76px;
+    white-space: nowrap;
+  }
+
+  /* Empty label (column with icon only, no text header) */
+  .tbl-wrap tbody td[data-label='']::before { display: none; }
+
+  /* Action/button cells — full width, right-aligned */
+  .tbl-wrap tbody td:last-child {
+    justify-content: flex-end;
+    gap: 6px;
+    padding: 10px 14px;
+    background: rgba(59,130,246,0.025);
+    flex-wrap: wrap;
+  }
+  .tbl-wrap tbody td:last-child::before { display: none; }
+
+  /* Image/photo cells — center the image */
+  .tbl-wrap tbody td img {
+    width: 36px; height: 36px;
+    border-radius: 8px; object-fit: cover;
+  }
+
+  /* Disable sticky-first in card mode (no horizontal scroll = no need for sticky) */
+  .tbl-sticky-first table { min-width: unset; }
+  .tbl-sticky-first th:first-child,
+  .tbl-sticky-first td:first-child {
+    position: static; box-shadow: none; background: unset;
+  }
+
+  /* Also override global table styles that set min-width */
+  table { min-width: unset !important; }
 
   /* ── Forms ─────────────────────────────────────────────────────────── */
   .form-grid { grid-template-columns: 1fr; gap: 14px; }
@@ -1137,9 +1206,9 @@ tbody tr { transition: background 0.15s; }
   .stat-sub { font-size: 0.62rem; }
 
   .chart-container { height: 170px; }
-  table { font-size: 0.75rem; }
-  thead th { padding: 10px 8px; }
-  tbody td { padding: 10px 8px; }
+  /* Card table on 480px — slightly tighter */
+  .tbl-wrap tbody td { padding: 8px 12px; font-size: 0.78rem; }
+  .tbl-wrap tbody td[data-label]::before { font-size: 0.6rem; min-width: 68px; }
 
   .card { padding: 13px; border-radius: 16px; }
   .card-title { font-size: 0.88rem; margin-bottom: 12px; }
