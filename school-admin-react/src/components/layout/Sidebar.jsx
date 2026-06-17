@@ -8,7 +8,7 @@ import {
   IconAttendanceStudents, IconAttendanceTeachers, IconFees, IconClassFees,
   IconSalary, IconExams, IconMarks, IconResults, IconClassNotices,
   IconTimetables, IconAnnouncements, IconSettings, IconClose, IconSchool, IconBriefcase,
-  IconCalendar,
+  IconCalendar, IconWhatsApp, IconAlertCircle, IconCertificate,
 } from '../common/Icons.jsx';
 
 const ALL_LINKS = [
@@ -19,15 +19,18 @@ const ALL_LINKS = [
   { to: '/attendance/students', labelKey: 'nav.attStu', Icon: IconAttendanceStudents, adminOnly: false },
   { to: '/attendance/teachers', labelKey: 'nav.attTch', Icon: IconAttendanceTeachers, adminOnly: true },
   { to: '/fees', labelKey: 'nav.fees', Icon: IconFees, adminOnly: true },
+  { to: '/fee-defaulters', labelKey: 'nav.feeDefaulters', Icon: IconAlertCircle, adminOnly: true },
   { to: '/class-fees', labelKey: 'nav.classFees', Icon: IconClassFees, adminOnly: true },
   { to: '/salary', labelKey: 'nav.salary', Icon: IconSalary, adminOnly: true },
   { to: '/teacher-portal', labelKey: 'nav.teacherPortal', Icon: IconBriefcase, teacherOnly: true },
   { to: '/exams', labelKey: 'nav.exams', Icon: IconExams, adminOnly: false },
   { to: '/marks', labelKey: 'nav.marks', Icon: IconMarks, adminOnly: true },
+  { to: '/certificates', labelKey: 'nav.certificates', Icon: IconCertificate, adminOnly: true },
   { to: '/class-notices', labelKey: 'nav.classNotices', Icon: IconClassNotices, adminOnly: false },
   { to: '/timetables', labelKey: 'nav.timetables', Icon: IconTimetables, adminOnly: false },
   { to: '/timetable-builder', labelKey: 'nav.timetableBuilder', Icon: IconCalendar, adminOnly: true },
   { to: '/announcements', labelKey: 'nav.announcements', Icon: IconAnnouncements, adminOnly: false },
+  { to: '/whatsapp', labelKey: 'nav.whatsapp', Icon: IconWhatsApp, adminOnly: true },
   { to: '/settings', labelKey: 'nav.settings', Icon: IconSettings, adminOnly: true },
 ];
 

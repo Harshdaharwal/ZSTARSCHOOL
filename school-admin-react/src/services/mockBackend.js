@@ -1612,28 +1612,46 @@ export function createMockApi(getActor) {
         rollNo: student?.Roll_No || null,
       };
     },
-    async getClassAttendanceSummary(cls, sec) {
+    async getClassAttendanceSummary(cls, sec, fromDate, toDate) {
       await delay();
+      // Helper: parse DD/MM/YYYY → Date (returns null on bad input)
+      const parseIN = (d) => {
+        if (!d) return null;
+        const p = String(d).trim().split('/');
+        if (p.length !== 3) return null;
+        const dt = new Date(Number(p[2]), Number(p[1]) - 1, Number(p[0]));
+        return isNaN(dt.getTime()) ? null : dt;
+      };
+      const fromTs = fromDate ? parseIN(fromDate)?.getTime() ?? null : null;
+      const toTs   = toDate   ? parseIN(toDate)?.getTime()   ?? null : null;
+      const inRange = (dateStr) => {
+        const ts = parseIN(dateStr)?.getTime();
+        if (ts == null) return false;
+        if (fromTs != null && ts < fromTs) return false;
+        if (toTs   != null && ts > toTs)   return false;
+        return true;
+      };
       const students = DB.students.filter(
         (s) => String(s.Class) === String(cls) && (!sec || s.Section === sec) && s.Status === 'Active'
       );
-      // Collect all unique dates for this class
+      // Collect all unique dates for this class (filtered to range)
       const classRecs = DB.att_stu.filter(
-        (a) => String(a.Class) === String(cls) && (!sec || a.Section === sec)
+        (a) => String(a.Class) === String(cls) && (!sec || a.Section === sec) && inRange(a.Date)
       );
       const allDates = [...new Set(classRecs.map((a) => a.Date))].sort((a, b) => {
-        // sort dates DD/MM/YYYY
-        const parse = (d) => { const p = d.split('/'); return new Date(p[2], p[1]-1, p[0]); };
-        return parse(a) - parse(b);
+        const ta = parseIN(a)?.getTime() ?? 0;
+        const tb = parseIN(b)?.getTime() ?? 0;
+        return ta - tb;
       });
       const rows = students.map((s) => {
-        const recs = DB.att_stu.filter((a) => String(a.Student_ID) === String(s.Student_ID));
+        const recs = DB.att_stu.filter(
+          (a) => String(a.Student_ID) === String(s.Student_ID) && inRange(a.Date)
+        );
         const present = recs.filter((r) => r.Status === 'Present').length;
-        const absent = recs.filter((r) => r.Status === 'Absent').length;
-        const late = recs.filter((r) => r.Status === 'Late').length;
-        const total = recs.length;
-        // day-wise status map: date -> P/A/L
-        const dayMap = {};
+        const absent  = recs.filter((r) => r.Status === 'Absent').length;
+        const late    = recs.filter((r) => r.Status === 'Late').length;
+        const total   = recs.length;
+        const dayMap  = {};
         recs.forEach((r) => { dayMap[r.Date] = r.Status === 'Present' ? 'P' : r.Status === 'Absent' ? 'A' : 'L'; });
         return {
           studentId: s.Student_ID,
@@ -1699,9 +1717,59 @@ export function createMockApi(getActor) {
         total,
         present,
         absent: recs.filter((r) => r.Status === 'Absent').length,
-        leave: recs.filter((r) => r.Status === 'Leave').length,
+        leave: recs.filter((r) => r.Status === 'Leave' || r.Status === 'Late').length,
         pct: total ? ((present / total) * 100).toFixed(1) : '0.0',
       };
+    },
+    async getTeachersAttendanceReport(fromDate, toDate) {
+      await delay();
+      // Helper: parse DD/MM/YYYY → Date (returns null on bad input)
+      const parseIN = (d) => {
+        if (!d) return null;
+        const p = String(d).trim().split('/');
+        if (p.length !== 3) return null;
+        const dt = new Date(Number(p[2]), Number(p[1]) - 1, Number(p[0]));
+        return isNaN(dt.getTime()) ? null : dt;
+      };
+      const fromTs = fromDate ? parseIN(fromDate)?.getTime() ?? null : null;
+      const toTs   = toDate   ? parseIN(toDate)?.getTime()   ?? null : null;
+      const inRange = (dateStr) => {
+        const ts = parseIN(dateStr)?.getTime();
+        if (ts == null) return false;
+        if (fromTs != null && ts < fromTs) return false;
+        if (toTs   != null && ts > toTs)   return false;
+        return true;
+      };
+      const teachers = DB.teachers.filter((t) => t.Status === 'Active');
+      // All unique dates in range
+      const rangedRecs = DB.att_tch.filter((a) => inRange(a.Date));
+      const allDates = [...new Set(rangedRecs.map((a) => a.Date))].sort((a, b) => {
+        const ta = parseIN(a)?.getTime() ?? 0;
+        const tb = parseIN(b)?.getTime() ?? 0;
+        return ta - tb;
+      });
+      const rows = teachers.map((t) => {
+        const recs = DB.att_tch.filter(
+          (a) => String(a.Teacher_ID) === String(t.Teacher_ID) && inRange(a.Date)
+        );
+        const present = recs.filter((r) => r.Status === 'Present').length;
+        const absent  = recs.filter((r) => r.Status === 'Absent').length;
+        const leave   = recs.filter((r) => r.Status === 'Leave' || r.Status === 'Late').length;
+        const total   = recs.length;
+        const dayMap  = {};
+        recs.forEach((r) => {
+          dayMap[r.Date] = r.Status === 'Present' ? 'P' : r.Status === 'Absent' ? 'A' : 'L';
+        });
+        return {
+          teacherId: t.Teacher_ID,
+          name: t.Name,
+          subject: t.Subject,
+          total, present, absent, leave,
+          pct: total ? ((present / total) * 100).toFixed(1) : '0.0',
+          dayMap,
+        };
+      });
+      return { rows, dates: allDates };
     },
     async addFeeRecord(d) {
       await delay();

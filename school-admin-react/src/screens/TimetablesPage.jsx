@@ -14,10 +14,6 @@ import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 import { IconPlus, IconDocument } from '../components/common/Icons.jsx';
 
 const TYPES = ['Class', 'Test', 'Exam', 'Other'];
-const TABS = [
-  { id: 'add', label: 'Add Entry', Icon: IconPlus },
-  { id: 'view', label: 'View Timetable', Icon: IconDocument },
-];
 
 export default function TimetablesPage() {
   const api = useApi();
@@ -27,7 +23,7 @@ export default function TimetablesPage() {
   const load = useCallback(() => api.getTimetables(), [api]);
   const { data: rows, loading, refresh } = useAsyncResource(load);
   const [confirm, setConfirm] = useState(null);
-  const [tab, setTab] = useState('view');
+  const [addModalOpen, setAddModalOpen] = useState(false);
   const [viewFilter, setViewFilter] = useState('mine');
   const [editing, setEditing] = useState(null);
 
@@ -50,6 +46,7 @@ export default function TimetablesPage() {
       showToast(res.msg, res.ok ? 'ok' : 'err');
       if (res.ok) {
         e.target.reset();
+        setAddModalOpen(false);
         refresh();
       }
     },
@@ -116,97 +113,25 @@ export default function TimetablesPage() {
       </p>
 
       {isAdmin && (
-        <>
-          <FilterTabs tabs={TABS} activeId={tab} onChange={setTab} />
-          {tab === 'view' && (
-            <div className="btn-row" style={{ marginBottom: 12 }}>
-              <Button size="sm" variant={viewFilter === 'mine' ? 'primary' : 'ghost'} onClick={() => setViewFilter('mine')}>
-                My Created
-              </Button>
-              <Button size="sm" variant={viewFilter === 'all' ? 'primary' : 'ghost'} onClick={() => setViewFilter('all')}>
-                All Entries
-              </Button>
-            </div>
-          )}
-        </>
+        <div className="btn-row" style={{ marginBottom: 12 }}>
+          <Button size="sm" variant={viewFilter === 'mine' ? 'primary' : 'ghost'} onClick={() => setViewFilter('mine')}>
+            My Created
+          </Button>
+          <Button size="sm" variant={viewFilter === 'all' ? 'primary' : 'ghost'} onClick={() => setViewFilter('all')}>
+            All Entries
+          </Button>
+        </div>
       )}
 
-      {isAdmin && tab === 'add' && (
-        <Card>
-          <CardTitle>Add timetable entry</CardTitle>
-          <form className="form-grid" onSubmit={submit}>
-            <div className="form-group">
-              <label>Type *</label>
-              <select name="type" required defaultValue="Class">
-                {TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label>Title *</label>
-              <input name="title" required placeholder="e.g. Mid-term Science" />
-            </div>
-            <div className="form-group">
-              <label>Class</label>
-              <select name="cls">
-                <option value="">—</option>
-                {[...Array(12)].map((_, i) => (
-                  <option key={i + 1}>{i + 1}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label>Section</label>
-              <select name="section">
-                <option value="">—</option>
-                {['A', 'B', 'C', 'D'].map((x) => (
-                  <option key={x}>{x}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label>Day (weekly)</label>
-              <select name="day">
-                <option value="">—</option>
-                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d) => (
-                  <option key={d}>{d}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label>Event date (tests/exams)</label>
-              <input name="eventDate" placeholder="dd/mm/yyyy" />
-            </div>
-            <div className="form-group">
-              <label>Time slot</label>
-              <input name="timeSlot" placeholder="09:00–10:00" />
-            </div>
-            <div className="form-group">
-              <label>Room</label>
-              <input name="room" />
-            </div>
-            <div className="form-group">
-              <label>Subject</label>
-              <input name="subject" />
-            </div>
-            <div className="form-group full">
-              <label>Notes</label>
-              <textarea name="notes" rows={2} />
-            </div>
-            <div className="form-group full btn-row">
-              <Button type="submit">Save entry</Button>
-            </div>
-          </form>
-        </Card>
-      )}
-
-      <Card style={{ marginTop: 24 }}>
+      <Card>
         <SectionHeader
           title={isAdmin ? (viewFilter === 'mine' ? 'My created entries' : 'All entries') : 'All entries'}
-          actions={<Button onClick={() => refresh()}>Refresh</Button>}
+          actions={
+            <div style={{ display: 'flex', gap: 8 }}>
+              {isAdmin && <Button onClick={() => setAddModalOpen(true)} size="sm" variant="primary">Add Entry</Button>}
+              <Button onClick={() => refresh()} size="sm" variant="ghost">Refresh</Button>
+            </div>
+          }
         />
         <div className="tbl-wrap">
           <table>
@@ -270,6 +195,75 @@ export default function TimetablesPage() {
         onConfirm={confirm?.onConfirm}
         onCancel={() => setConfirm(null)}
       />
+
+      <Modal open={addModalOpen} title="Add timetable entry" onClose={() => setAddModalOpen(false)}>
+        <form className="form-grid" onSubmit={submit}>
+          <div className="form-group">
+            <label>Type *</label>
+            <select name="type" required defaultValue="Class">
+              {TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Title *</label>
+            <input name="title" required placeholder="e.g. Mid-term Science" />
+          </div>
+          <div className="form-group">
+            <label>Class</label>
+            <select name="cls">
+              <option value="">—</option>
+              {[...Array(12)].map((_, i) => (
+                <option key={i + 1}>{i + 1}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Section</label>
+            <select name="section">
+              <option value="">—</option>
+              {['A', 'B', 'C', 'D'].map((x) => (
+                <option key={x}>{x}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Day (weekly)</label>
+            <select name="day">
+              <option value="">—</option>
+              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d) => (
+                <option key={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Event date (tests/exams)</label>
+            <input name="eventDate" placeholder="dd/mm/yyyy" />
+          </div>
+          <div className="form-group">
+            <label>Time slot</label>
+            <input name="timeSlot" placeholder="09:00–10:00" />
+          </div>
+          <div className="form-group">
+            <label>Room</label>
+            <input name="room" />
+          </div>
+          <div className="form-group">
+            <label>Subject</label>
+            <input name="subject" />
+          </div>
+          <div className="form-group full">
+            <label>Notes</label>
+            <textarea name="notes" rows={2} />
+          </div>
+          <div className="form-group full btn-row">
+            <Button type="submit">Save entry</Button>
+          </div>
+        </form>
+      </Modal>
 
       <Modal open={!!editing} title="Edit timetable entry" onClose={() => setEditing(null)}>
         {editing && (

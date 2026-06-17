@@ -142,6 +142,7 @@ export default function TeachersPage() {
 
   const [openEdit, setOpenEdit] = useState(false);
   const [openView, setOpenView] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
   const [edit, setEdit] = useState(null);
   const [view, setView] = useState(null);
 
@@ -182,6 +183,7 @@ export default function TeachersPage() {
       if (res.ok) {
         e.target.reset();
         setAddPhoto('');
+        setAddModalOpen(false);
         refresh();
       }
     },
@@ -276,85 +278,15 @@ export default function TeachersPage() {
 
   return (
     <>
-      <Card>
-        <CardTitle><IconPlus size={16} strokeWidth={2.5} style={{ verticalAlign: 'middle', marginRight: 6 }} />Add Teacher</CardTitle>
-        <form className="form-grid" onSubmit={submitAdd}>
-          {/* Photo picker */}
-          <div className="form-group full" style={{ display: 'flex', justifyContent: 'center' }}>
-            <PhotoPicker value={addPhoto} onChange={setAddPhoto} />
-          </div>
-
-          <div className="form-group">
-            <label>Name *</label>
-            <input name="name" required />
-          </div>
-          <div className="form-group">
-            <label>Subject *</label>
-            <input name="subject" required />
-          </div>
-          <div className="form-group">
-            <label>Phone *</label>
-            <input
-              name="phone"
-              required
-              maxLength={10}
-              pattern="\d{10}"
-              title="Enter a 10-digit mobile number"
-              placeholder="10-digit number"
-            />
-          </div>
-          <div className="form-group">
-            <label>Email</label>
-            <input name="email" type="email" />
-          </div>
-          <div className="form-group">
-            <label>Qualification</label>
-            <input name="qualification" />
-          </div>
-          <div className="form-group">
-            <label>Join date</label>
-            <input name="joinDate" type="date" />
-          </div>
-          <div className="form-group">
-            <label>Password *</label>
-            <input name="password" type="password" autoComplete="new-password" required minLength={4} />
-          </div>
-          <div className="form-group">
-            <label>Confirm password *</label>
-            <input name="password2" type="password" autoComplete="new-password" required minLength={4} />
-          </div>
-          <div className="form-group">
-            <label>Class</label>
-            <select name="classAssigned">
-              <option value="">--</option>
-              {[...Array(12)].map((_, i) => (
-                <option key={i + 1}>{i + 1}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Section</label>
-            <select name="sectionAssigned">
-              <option value="">--</option>
-              {['A', 'B', 'C', 'D'].map((x) => (
-                <option key={x}>{x}</option>
-              ))}
-            </select>
-          </div>
-          <p className="form-group full" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-            Password is stored for demo / local mode only. Use your real auth provider in production.
-          </p>
-          <div className="form-group full btn-row">
-            <Button type="submit">Add Teacher</Button>
-          </div>
-        </form>
-      </Card>
 
       <Card>
         <SectionHeader
           title="All Teachers"
           actions={(
             <div style={{ display: 'flex', gap: 8 }}>
+              <Button onClick={() => setAddModalOpen(true)} size="sm" variant="primary">
+                <IconPlus size={14} style={{ marginRight: 4 }} /> Add Teacher
+              </Button>
               <Button onClick={downloadTeachersCsv} size="sm" variant="ghost">Download CSV</Button>
               <Button onClick={() => refresh()} size="sm" variant="ghost"><IconRefresh size={14} /> Refresh</Button>
             </div>
@@ -362,6 +294,16 @@ export default function TeachersPage() {
         />
         <div className="filter-bar">
           <input placeholder="Search…" style={{ flex: 1 }} value={q} onChange={(e) => setQ(e.target.value)} />
+          {q && (
+            <Button
+              variant="ghost"
+              onClick={() => setQ('')}
+              size="sm"
+              style={{ marginLeft: 'auto' }}
+            >
+              Clear
+            </Button>
+          )}
         </div>
         <div className="tbl-wrap">
           <table>
@@ -588,6 +530,77 @@ export default function TeachersPage() {
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeletingTeacher(null)}
       />
+
+      <Modal open={addModalOpen} title="Add Teacher" onClose={() => setAddModalOpen(false)}>
+        <form className="form-grid" onSubmit={submitAdd}>
+          <div className="form-group full" style={{ display: 'flex', justifyContent: 'center' }}>
+            <PhotoPicker value={addPhoto} onChange={setAddPhoto} />
+          </div>
+          <div className="form-group">
+            <label>Name *</label>
+            <input name="name" required />
+          </div>
+          <div className="form-group">
+            <label>Subject *</label>
+            <input name="subject" required />
+          </div>
+          <div className="form-group">
+            <label>Phone *</label>
+            <input
+              name="phone"
+              required
+              maxLength={10}
+              pattern="\d{10}"
+              title="Enter a 10-digit mobile number"
+              placeholder="10-digit number"
+            />
+          </div>
+          <div className="form-group">
+            <label>Email</label>
+            <input name="email" type="email" />
+          </div>
+          <div className="form-group">
+            <label>Qualification</label>
+            <input name="qualification" />
+          </div>
+          <div className="form-group">
+            <label>Join date</label>
+            <input name="joinDate" type="date" />
+          </div>
+          <div className="form-group">
+            <label>Password *</label>
+            <input name="password" type="password" autoComplete="new-password" required minLength={4} />
+          </div>
+          <div className="form-group">
+            <label>Confirm password *</label>
+            <input name="password2" type="password" autoComplete="new-password" required minLength={4} />
+          </div>
+          <div className="form-group">
+            <label>Class</label>
+            <select name="classAssigned">
+              <option value="">--</option>
+              {[...Array(12)].map((_, i) => (
+                <option key={i + 1}>{i + 1}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Section</label>
+            <select name="sectionAssigned">
+              <option value="">--</option>
+              {['A', 'B', 'C', 'D'].map((x) => (
+                <option key={x}>{x}</option>
+              ))}
+            </select>
+          </div>
+          <p className="form-group full" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+            Password is stored for demo / local mode only. Use your real auth provider in production.
+          </p>
+          <div className="form-group full btn-row">
+            <Button type="submit">Add Teacher</Button>
+          </div>
+        </form>
+      </Modal>
     </>
   );
 }

@@ -3,6 +3,7 @@ import { Card, CardTitle } from '../components/common/Card.jsx';
 import { Button } from '../components/common/Button.jsx';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 import { FilterTabs } from '../components/common/FilterTabs.jsx';
+import { Modal } from '../components/common/Modal.jsx';
 import { SectionHeader } from '../components/common/SectionHeader.jsx';
 import { Spinner } from '../components/common/Spinner.jsx';
 import { IconClasses, IconTimetables, IconRefresh, IconSchool } from '../components/common/Icons.jsx';
@@ -21,6 +22,8 @@ export default function ClassesPage() {
   const { showToast } = useToast();
   const [tab, setTab] = useState('list');
   const [confirm, setConfirm] = useState(null);
+  const [addClassModalOpen, setAddClassModalOpen] = useState(false);
+  const [addSchedModalOpen, setAddSchedModalOpen] = useState(false);
 
   const loadClasses = useCallback(() => api.getAllClasses(), [api]);
   const { data: classes, loading, refresh } = useAsyncResource(loadClasses);
@@ -38,6 +41,7 @@ export default function ClassesPage() {
       showToast(res.msg, res.ok ? 'ok' : 'err');
       if (res.ok) {
         e.target.reset();
+        setAddClassModalOpen(false);
         refresh();
       }
     },
@@ -81,7 +85,11 @@ export default function ClassesPage() {
         timeSlot,
       });
       showToast(res.msg, res.ok ? 'ok' : 'err');
-      if (res.ok) e.target.reset();
+      if (res.ok) {
+        e.target.reset();
+        setAddSchedModalOpen(false);
+        refreshSch();
+      }
     },
     [api, showToast]
   );
@@ -111,7 +119,46 @@ export default function ClassesPage() {
       {tab === 'list' && (
         <>
           <Card>
-            <CardTitle><IconSchool size={16} strokeWidth={2} style={{ marginRight: 6, verticalAlign: 'middle' }} />Add Class</CardTitle>
+            <SectionHeader 
+              title="All Classes" 
+              actions={
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button onClick={() => setAddClassModalOpen(true)} size="sm" variant="primary">Add Class</Button>
+                  <Button onClick={() => refresh()} size="sm" variant="ghost"><IconRefresh size={14} /></Button>
+                </div>
+              } 
+            />
+            <div className="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Class</th>
+                    <th>Section</th>
+                    <th>Teacher ID</th>
+                    <th>Room</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {(classes || []).map((c) => (
+                    <tr key={c.Class + c.Section}>
+                      <td>{esc(c.Class)}</td>
+                      <td>{esc(c.Section)}</td>
+                      <td>{esc(c.Class_Teacher_ID)}</td>
+                      <td>{esc(c.Room_No)}</td>
+                      <td>
+                        <Button variant="danger" size="sm" onClick={() => del(c.Class, c.Section)}>
+                          Delete
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+          
+          <Modal open={addClassModalOpen} title="Add Class" onClose={() => setAddClassModalOpen(false)}>
             <form className="form-grid" onSubmit={addClass}>
               <div className="form-group">
                 <label>Class *</label>
@@ -142,101 +189,18 @@ export default function ClassesPage() {
                 <Button type="submit">Add Class</Button>
               </div>
             </form>
-          </Card>
-          <Card>
-            <SectionHeader title="All Classes" actions={<Button onClick={() => refresh()} size="sm" variant="ghost"><IconRefresh size={14} /></Button>} />
-            <div className="tbl-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Class</th>
-                    <th>Section</th>
-                    <th>Teacher ID</th>
-                    <th>Room</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {(classes || []).map((c) => (
-                    <tr key={c.Class + c.Section}>
-                      <td>{esc(c.Class)}</td>
-                      <td>{esc(c.Section)}</td>
-                      <td>{esc(c.Class_Teacher_ID)}</td>
-                      <td>{esc(c.Room_No)}</td>
-                      <td>
-                        <Button variant="danger" size="sm" onClick={() => del(c.Class, c.Section)}>
-                          Delete
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          </Modal>
         </>
       )}
       {tab === 'schedule' && (
         <>
           <Card>
-            <CardTitle>Add Schedule</CardTitle>
-            <form className="form-grid" onSubmit={addSched}>
-              <div className="form-group">
-                <label>Class *</label>
-                <select name="cls" required>
-                  <option value="">--</option>
-                  {[...Array(12)].map((_, i) => (
-                    <option key={i + 1}>{i + 1}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Section *</label>
-                <select name="section" required>
-                  {['A', 'B', 'C', 'D'].map((x) => (
-                    <option key={x}>{x}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Day *</label>
-                <select name="day" required>
-                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d) => (
-                    <option key={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Period *</label>
-                <input name="period" required />
-              </div>
-              <div className="form-group">
-                <label>Subject *</label>
-                <input name="subject" required />
-              </div>
-              <div className="form-group">
-                <label>Teacher</label>
-                <input name="tname" />
-              </div>
-              <div className="form-group">
-                <label>Room</label>
-                <input name="room" />
-              </div>
-              <div className="form-group">
-                <label>From</label>
-                <input name="timeFrom" type="time" />
-              </div>
-              <div className="form-group">
-                <label>To</label>
-                <input name="timeTo" type="time" />
-              </div>
-              <div className="form-group full btn-row">
-                <Button type="submit">Add</Button>
-              </div>
-            </form>
-          </Card>
-          <Card>
-            <CardTitle>View Schedule</CardTitle>
+            <SectionHeader 
+              title="View Schedule" 
+              actions={
+                <Button onClick={() => setAddSchedModalOpen(true)} size="sm" variant="primary">Add Schedule</Button>
+              } 
+            />
             <div className="filter-bar">
               <select value={vCls} onChange={(e) => setVCls(e.target.value)}>
                 <option value="">Class</option>
@@ -310,6 +274,63 @@ export default function ClassesPage() {
               })}
             </div>
           </Card>
+
+          <Modal open={addSchedModalOpen} title="Add Schedule" onClose={() => setAddSchedModalOpen(false)}>
+            <form className="form-grid" onSubmit={addSched}>
+              <div className="form-group">
+                <label>Class *</label>
+                <select name="cls" required>
+                  <option value="">--</option>
+                  {[...Array(12)].map((_, i) => (
+                    <option key={i + 1}>{i + 1}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Section *</label>
+                <select name="section" required>
+                  {['A', 'B', 'C', 'D'].map((x) => (
+                    <option key={x}>{x}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Day *</label>
+                <select name="day" required>
+                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d) => (
+                    <option key={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Period *</label>
+                <input name="period" required />
+              </div>
+              <div className="form-group">
+                <label>Subject *</label>
+                <input name="subject" required />
+              </div>
+              <div className="form-group">
+                <label>Teacher</label>
+                <input name="tname" />
+              </div>
+              <div className="form-group">
+                <label>Room</label>
+                <input name="room" />
+              </div>
+              <div className="form-group">
+                <label>From</label>
+                <input name="timeFrom" type="time" />
+              </div>
+              <div className="form-group">
+                <label>To</label>
+                <input name="timeTo" type="time" />
+              </div>
+              <div className="form-group full btn-row">
+                <Button type="submit">Add</Button>
+              </div>
+            </form>
+          </Modal>
         </>
       )}
     </>

@@ -29,6 +29,9 @@ const AnnouncementsPage = lazy(() => import('./screens/AnnouncementsPage.jsx'));
 const SalaryPage = lazy(() => import('./screens/SalaryPage.jsx'));
 const ClassAnnouncementsPage = lazy(() => import('./screens/ClassAnnouncementsPage.jsx'));
 const TeacherPortalPage = lazy(() => import('./screens/TeacherPortalPage.jsx'));
+const WhatsAppPage = lazy(() => import('./screens/WhatsAppPage.jsx'));
+const FeeDefaultersPage = lazy(() => import('./screens/FeeDefaultersPage.jsx'));
+const CertificatesPage = lazy(() => import('./screens/CertificatesPage.jsx'));
 
 /** Browser history in dev; hash routes in production so static hosts (e.g. Live Server) work without SPA fallback. */
 const Router = import.meta.env.PROD ? HashRouter : BrowserRouter;
@@ -198,6 +201,36 @@ export default function App() {
                       <Suspense fallback={<SuspenseFallback />}>
                         <RequireAdmin>
                           <SettingsPage />
+                        </RequireAdmin>
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/whatsapp"
+                    element={
+                      <Suspense fallback={<SuspenseFallback />}>
+                        <RequireAdmin>
+                          <WhatsAppPage />
+                        </RequireAdmin>
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/fee-defaulters"
+                    element={
+                      <Suspense fallback={<SuspenseFallback />}>
+                        <RequireAdmin>
+                          <FeeDefaultersPage />
+                        </RequireAdmin>
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/certificates"
+                    element={
+                      <Suspense fallback={<SuspenseFallback />}>
+                        <RequireAdmin>
+                          <CertificatesPage />
                         </RequireAdmin>
                       </Suspense>
                     }

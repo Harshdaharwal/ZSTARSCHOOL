@@ -30,6 +30,8 @@ export default function ExamsPage() {
   const [tab, setTab] = useState('ex');
   const [confirm, setConfirm] = useState(null);
   const [editExam, setEditExam] = useState(null);
+  const [addExamModalOpen, setAddExamModalOpen] = useState(false);
+  const [addMarkModalOpen, setAddMarkModalOpen] = useState(false);
 
   // Load teacher's assigned class so we can pre-fill the form
   const loadMeta = useCallback(() => isTeacher ? api.getMarksTeacherData() : Promise.resolve(null), [api, isTeacher]);
@@ -100,7 +102,7 @@ export default function ExamsPage() {
       passMarks: fd.get('ps'),
     });
     showToast(res.msg, res.ok ? 'ok' : 'err');
-    if (res.ok) { e.target.reset(); re(); setExamPage(1); }
+    if (res.ok) { e.target.reset(); re(); setExamPage(1); setAddExamModalOpen(false); }
   }, [api, re, showToast]);
 
   // ── Update exam ────────────────────────────────────────────────────────
@@ -135,7 +137,7 @@ export default function ExamsPage() {
       maxMarks: fd.get('mx'),
     });
     showToast(res.msg, res.ok ? 'ok' : 'err');
-    if (res.ok) { rm(); setMarkPage(1); }
+    if (res.ok) { rm(); setMarkPage(1); setAddMarkModalOpen(false); }
   }, [api, rm, showToast]);
 
   // ── Delete exam ────────────────────────────────────────────────────────
@@ -251,59 +253,13 @@ export default function ExamsPage() {
       {/* ════════════════ EXAM DETAILS TAB ════════════════ */}
       {tab === 'ex' && (
         <>
-          <Card>
-            <CardTitle>Add Exam</CardTitle>
-            <form className="form-grid" onSubmit={addExam}>
-              <div className="form-group">
-                <label>Exam Name *</label>
-                <input name="nm" required />
-              </div>
-              <div className="form-group">
-                <label>Type</label>
-                <select name="type" defaultValue="Exam">
-                  {EXAM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Class *</label>
-                <select name="cls" required defaultValue={teacherClass}>
-                  <option value="">--</option>
-                  {[...Array(12)].map((_, i) => (
-                    <option key={i + 1} value={i + 1}>{i + 1}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Subject *</label>
-                <input name="sub" required />
-              </div>
-              <div className="form-group">
-                <label>Date</label>
-                <input name="dt" type="date" />
-              </div>
-              <div className="form-group">
-                <label>Time</label>
-                <input name="time" type="time" />
-              </div>
-              <div className="form-group">
-                <label>Max Marks</label>
-                <input name="mx" type="number" defaultValue={100} />
-              </div>
-              <div className="form-group">
-                <label>Pass Marks</label>
-                <input name="ps" type="number" defaultValue={33} />
-              </div>
-              <div className="form-group full btn-row">
-                <Button type="submit">Add Exam</Button>
-              </div>
-            </form>
-          </Card>
 
           <Card>
             <SectionHeader
               title="Exam Records"
               actions={
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <Button onClick={() => setAddExamModalOpen(true)} size="sm" variant="primary">Add Exam</Button>
                   <input
                     placeholder="Search exams…"
                     value={examSearch}
@@ -361,52 +317,67 @@ export default function ExamsPage() {
                 </tbody>
               </table>
             </div>
-            <PaginationBar page={examPage} pageSize={PAGE_SIZE} total={filteredExams.length} onPageChange={setExamPage} />
+          <PaginationBar page={examPage} pageSize={PAGE_SIZE} total={filteredExams.length} onPageChange={setExamPage} />
           </Card>
-        </>
-      )}
-
-      {/* ════════════════ MARKS TAB ════════════════ */}
-      {tab === 'mk' && (
-        <>
-          <Card>
-            <CardTitle>Enter Marks</CardTitle>
-            <form className="form-grid" onSubmit={addMark}>
+          <Modal open={addExamModalOpen} title="Add Exam" onClose={() => setAddExamModalOpen(false)}>
+            <form className="form-grid" onSubmit={addExam}>
               <div className="form-group">
-                <label>Exam ID *</label>
-                <input name="eid" required placeholder="e.g. EXM_12345678" />
+                <label>Exam Name *</label>
+                <input name="nm" required />
               </div>
               <div className="form-group">
-                <label>Student ID *</label>
-                <input name="sid" required placeholder="e.g. STU_1001" />
+                <label>Type</label>
+                <select name="type" defaultValue="Exam">
+                  {EXAM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
               </div>
               <div className="form-group">
-                <label>Student Name</label>
-                <input name="snm" placeholder="Optional" />
+                <label>Class *</label>
+                <select name="cls" required defaultValue={teacherClass}>
+                  <option value="">--</option>
+                  {[...Array(12)].map((_, i) => (
+                    <option key={i + 1} value={i + 1}>{i + 1}</option>
+                  ))}
+                </select>
               </div>
               <div className="form-group">
                 <label>Subject *</label>
                 <input name="sub" required />
               </div>
               <div className="form-group">
-                <label>Obtained *</label>
-                <input name="obt" type="number" min={0} required />
+                <label>Date</label>
+                <input name="dt" type="date" />
+              </div>
+              <div className="form-group">
+                <label>Time</label>
+                <input name="time" type="time" />
               </div>
               <div className="form-group">
                 <label>Max Marks</label>
                 <input name="mx" type="number" defaultValue={100} />
               </div>
+              <div className="form-group">
+                <label>Pass Marks</label>
+                <input name="ps" type="number" defaultValue={33} />
+              </div>
               <div className="form-group full btn-row">
-                <Button type="submit" variant="accent">Save Marks</Button>
+                <Button type="submit">Add Exam</Button>
               </div>
             </form>
-          </Card>
+          </Modal>
+        </>
+      )}
+
+      {/* ════════════════ MARKS TAB ════════════════ */}
+      {tab === 'mk' && (
+        <>
 
           <Card>
             <SectionHeader
               title="All Marks"
               actions={
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <Button onClick={() => setAddMarkModalOpen(true)} size="sm" variant="primary">Enter Marks</Button>
                   <input
                     placeholder="Search by student, roll no, exam…"
                     value={markSearch}
@@ -461,8 +432,39 @@ export default function ExamsPage() {
                 </tbody>
               </table>
             </div>
-            <PaginationBar page={markPage} pageSize={PAGE_SIZE} total={filteredMarks.length} onPageChange={setMarkPage} />
+          <PaginationBar page={markPage} pageSize={PAGE_SIZE} total={filteredMarks.length} onPageChange={setMarkPage} />
           </Card>
+          <Modal open={addMarkModalOpen} title="Enter Marks" onClose={() => setAddMarkModalOpen(false)}>
+            <form className="form-grid" onSubmit={addMark}>
+              <div className="form-group">
+                <label>Exam ID *</label>
+                <input name="eid" required placeholder="e.g. EXM_12345678" />
+              </div>
+              <div className="form-group">
+                <label>Student ID *</label>
+                <input name="sid" required placeholder="e.g. STU_1001" />
+              </div>
+              <div className="form-group">
+                <label>Student Name</label>
+                <input name="snm" placeholder="Optional" />
+              </div>
+              <div className="form-group">
+                <label>Subject *</label>
+                <input name="sub" required />
+              </div>
+              <div className="form-group">
+                <label>Obtained *</label>
+                <input name="obt" type="number" min={0} required />
+              </div>
+              <div className="form-group">
+                <label>Max Marks</label>
+                <input name="mx" type="number" defaultValue={100} />
+              </div>
+              <div className="form-group full btn-row">
+                <Button type="submit" variant="accent">Save Marks</Button>
+              </div>
+            </form>
+          </Modal>
         </>
       )}
     </>

@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 firebase-service-account*.json
 service-account*.json
+.env
+.env.local
+.env.*.local

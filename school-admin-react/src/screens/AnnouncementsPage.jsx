@@ -42,6 +42,7 @@ export default function AnnouncementsPage() {
   const { data: items, loading, refresh } = useAsyncResource(load);
 
   const [editing, setEditing] = useState(null);
+  const [addModalOpen, setAddModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [confirm, setConfirm] = useState(null);
 
@@ -90,6 +91,7 @@ export default function AnnouncementsPage() {
       showToast(res.msg, res.ok ? 'ok' : 'err');
       if (res.ok) {
         e.target.reset();
+        setAddModalOpen(false);
         refresh();
       }
     },
@@ -156,40 +158,17 @@ export default function AnnouncementsPage() {
         Post school-wide notices for staff and parents (shown in order of newest first).
       </p>
 
-      <Card>
-        <CardTitle>New announcement</CardTitle>
-        <form className="form-grid" onSubmit={submit}>
-          <div className="form-group full">
-            <label>Title *</label>
-            <input name="title" required placeholder="Short headline" />
-          </div>
-          <div className="form-group full">
-            <label>Message *</label>
-            <textarea name="body" required rows={4} placeholder="Full text…" />
-          </div>
-          <div className="form-group">
-            <label>Priority</label>
-            <select name="priority" defaultValue="Normal">
-              <option value="Normal">Normal</option>
-              <option value="High">High</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Attachment (Image/PDF/Doc, max 5MB)</label>
-            <div className="file-input-wrapper" style={{ marginTop: 4 }}>
-              <input type="file" name="attachment" style={{ fontSize: '0.85rem' }} />
-            </div>
-          </div>
-          <div className="form-group full btn-row">
-            <Button type="submit" disabled={submitting}>
-              {submitting ? 'Publishing…' : 'Publish'}
-            </Button>
-          </div>
-        </form>
-      </Card>
 
       <Card style={{ marginTop: 24 }}>
-        <SectionHeader title="Published" actions={<Button onClick={() => refresh()}>Refresh</Button>} />
+        <SectionHeader 
+          title="Published" 
+          actions={
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button onClick={() => setAddModalOpen(true)} size="sm" variant="primary">New Announcement</Button>
+              <Button onClick={() => refresh()}>Refresh</Button>
+            </div>
+          } 
+        />
         <div className="stack" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {!items?.length ? (
             <p className="empty" style={{ padding: 16 }}>
@@ -268,6 +247,38 @@ export default function AnnouncementsPage() {
           )}
         </div>
       </Card>
+      
+      <Modal open={addModalOpen} title="New announcement" onClose={() => setAddModalOpen(false)}>
+        <form className="form-grid" onSubmit={submit}>
+          <div className="form-group full">
+            <label>Title *</label>
+            <input name="title" required placeholder="Short headline" />
+          </div>
+          <div className="form-group full">
+            <label>Message *</label>
+            <textarea name="body" required rows={4} placeholder="Full text…" />
+          </div>
+          <div className="form-group">
+            <label>Priority</label>
+            <select name="priority" defaultValue="Normal">
+              <option value="Normal">Normal</option>
+              <option value="High">High</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Attachment (Image/PDF/Doc, max 5MB)</label>
+            <div className="file-input-wrapper" style={{ marginTop: 4 }}>
+              <input type="file" name="attachment" style={{ fontSize: '0.85rem' }} />
+            </div>
+          </div>
+          <div className="form-group full btn-row">
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Publishing…' : 'Publish'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
       <Modal 
         open={!!editing} 
         title={editing ? `Edit Announcement` : ''} 

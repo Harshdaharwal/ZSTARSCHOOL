@@ -12,6 +12,7 @@ import { Card, ChartCard } from '../components/common/Card.jsx';
 import { StatCard } from '../components/common/StatCard.jsx';
 import { Button } from '../components/common/Button.jsx';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
+import { Modal } from '../components/common/Modal.jsx';
 import { SectionHeader } from '../components/common/SectionHeader.jsx';
 import { Spinner } from '../components/common/Spinner.jsx';
 import { IconCalendar, IconChartBar, IconRefresh, IconPlus, IconSalary, IconBriefcase, IconBuilding, IconClock, IconCheck, IconTeachers } from '../components/common/Icons.jsx';
@@ -280,10 +281,7 @@ export default function SalaryPage() {
         }
       />
 
-      {/* ── Add Form ── */}
-      {showAddForm && (
-        <Card style={{ marginBottom: 24 }}>
-          <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconPlus size={16} strokeWidth={2.5} /> Add Salary Record</div>
+      <Modal open={showAddForm} title="Add Salary Record" onClose={() => setShowAddForm(false)}>
           <form className="form-grid" onSubmit={handleAdd}>
             <div className="form-group">
               <label>Staff ID</label>
@@ -337,8 +335,7 @@ export default function SalaryPage() {
               </Button>
             </div>
           </form>
-        </Card>
-      )}
+      </Modal>
 
       {/* ── Period + Role Filters ── */}
       <div className="filter-bar" style={{ marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>

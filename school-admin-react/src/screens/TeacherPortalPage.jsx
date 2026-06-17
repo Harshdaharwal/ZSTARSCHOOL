@@ -74,6 +74,7 @@ function TeacherPortalInner() {
   // ── Tests tab state ────────────────────────────────────────────────────────
   const [editExam, setEditExam] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [addTestModalOpen, setAddTestModalOpen] = useState(false);
   const [examSearch, setExamSearch] = useState('');
   const [examPage, setExamPage] = useState(1);
 
@@ -106,7 +107,7 @@ function TeacherPortalInner() {
       passMarks: fd.get('ps'),
     });
     showToast(res.msg, res.ok ? 'ok' : 'err');
-    if (res.ok) { e.target.reset(); refresh(); setExamPage(1); }
+    if (res.ok) { e.target.reset(); setAddTestModalOpen(false); refresh(); setExamPage(1); }
   }, [api, refresh, showToast, teacherClass]);
 
   const saveEditExam = useCallback(async (e) => {
@@ -281,34 +282,14 @@ function TeacherPortalInner() {
 
       {/* ════════════════ TESTS TAB ════════════════ */}
       {tab === 'tests' && (
-        <>
-          <Card>
-            <CardTitle>Add Test / Exam</CardTitle>
-            <form className="form-grid" onSubmit={addExam}>
-              <div className="form-group"><label>Exam Name *</label><input name="nm" required placeholder="e.g. Unit Test 1" /></div>
-              <div className="form-group">
-                <label>Type</label>
-                <select name="type" defaultValue="Test">
-                  {EXAM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div className="form-group"><label>Subject *</label><input name="sub" required placeholder="e.g. Mathematics" /></div>
-              <div className="form-group"><label>Date</label><input name="dt" type="date" /></div>
-              <div className="form-group"><label>Time</label><input name="time" type="time" /></div>
-              <div className="form-group"><label>Max Marks</label><input name="mx" type="number" defaultValue={100} /></div>
-              <div className="form-group"><label>Pass Marks</label><input name="ps" type="number" defaultValue={33} /></div>
-              <div className="form-group full" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Class {teacherClass} will be assigned automatically.
-              </div>
-              <div className="form-group full btn-row"><Button type="submit">Add Test</Button></div>
-            </form>
-          </Card>
 
+        <>
           <Card>
             <SectionHeader
               title={`Tests — Class ${teacherClass}`}
               actions={
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <Button onClick={() => setAddTestModalOpen(true)} size="sm" variant="primary">Add Test</Button>
                   <input
                     placeholder="Search tests…"
                     value={examSearch}
@@ -362,6 +343,27 @@ function TeacherPortalInner() {
             </div>
             <PaginationBar page={examPage} pageSize={PAGE_SIZE} total={filteredExams.length} onPageChange={setExamPage} />
           </Card>
+
+          <Modal open={addTestModalOpen} title="Add Test / Exam" onClose={() => setAddTestModalOpen(false)}>
+            <form className="form-grid" onSubmit={addExam}>
+              <div className="form-group"><label>Exam Name *</label><input name="nm" required placeholder="e.g. Unit Test 1" /></div>
+              <div className="form-group">
+                <label>Type</label>
+                <select name="type" defaultValue="Test">
+                  {EXAM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="form-group"><label>Subject *</label><input name="sub" required placeholder="e.g. Mathematics" /></div>
+              <div className="form-group"><label>Date</label><input name="dt" type="date" /></div>
+              <div className="form-group"><label>Time</label><input name="time" type="time" /></div>
+              <div className="form-group"><label>Max Marks</label><input name="mx" type="number" defaultValue={100} /></div>
+              <div className="form-group"><label>Pass Marks</label><input name="ps" type="number" defaultValue={33} /></div>
+              <div className="form-group full" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Class {teacherClass} will be assigned automatically.
+              </div>
+              <div className="form-group full btn-row"><Button type="submit">Add Test</Button></div>
+            </form>
+          </Modal>
         </>
       )}
 

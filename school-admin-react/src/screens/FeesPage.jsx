@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardTitle } from '../components/common/Card.jsx';
 import { Button } from '../components/common/Button.jsx';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
@@ -11,6 +12,7 @@ import { useApi } from '../hooks/useApi.js';
 import { useAsyncResource } from '../hooks/useAsyncResource.js';
 import { useToast } from '../hooks/useToast.js';
 import { esc, formatDateIN } from '../utils/format.js';
+import { downloadAttendancePdf } from '../utils/attendancePdf.js';
 
 const PAGE_SIZE = 15;
 const FEE_TYPE_OPTIONS = ['Monthly Fee', 'Annual Fee', 'Sports Fee', 'Lab Fee', 'Exam Fee', 'Other'];
@@ -105,16 +107,24 @@ function PaymentBanner({ info, onClose }) {
 
 export default function FeesPage() {
   const api = useApi();
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const [mode, setMode] = useState('all');
   const [confirm, setConfirm] = useState(null);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [paymentBanner, setPaymentBanner] = useState(null); // {studentName, studentId, amount, feeType, receipt, paidDate, waPhone}
+  const [addModalOpen, setAddModalOpen] = useState(false);
   const [editingFee, setEditingFee] = useState(null);
   const [editFeeTypeSelected, setEditFeeTypeSelected] = useState('Monthly Fee');
   const [editCustomFeeType, setEditCustomFeeType] = useState('');
   const [editRemarks, setEditRemarks] = useState('');
+
+  // Class fee structure add/edit modal
+  const [classFeeModal, setClassFeeModal] = useState(false);
+  const [classFeeForm, setClassFeeForm] = useState({ Class: '', Amount: '', Fee_Type: 'Monthly Fee', Note: '' });
+  const [classFeeCustomType, setClassFeeCustomType] = useState('');
+  const [classFeeLoading, setClassFeeLoading] = useState(false);
 
   // Student auto-lookup state
   const [studentInfo, setStudentInfo] = useState(null);
@@ -133,7 +143,7 @@ export default function FeesPage() {
     () => (typeof api.getClassFeeSettings === 'function' ? api.getClassFeeSettings() : []),
     [api]
   );
-  const { data: classFeeStructure } = useAsyncResource(loadClassFeeStructure);
+  const { data: classFeeStructure, refresh: refreshClassFee } = useAsyncResource(loadClassFeeStructure);
 
   const load = useCallback(() => {
     if (mode === 'pending') return api.getPendingFees();
@@ -255,6 +265,7 @@ export default function FeesPage() {
         setFeeTypeSelected('Monthly Fee');
         setCustomFeeType('');
         setCustomFeeDetail('');
+        setAddModalOpen(false);
         refresh();
       }
     },
@@ -363,6 +374,51 @@ export default function FeesPage() {
     [api, editCustomFeeType, editFeeTypeSelected, editRemarks, editingFee, refresh, showToast]
   );
 
+  /* ── Class Fee Structure handlers ── */
+  const saveClassFee = useCallback(async (e) => {
+    e.preventDefault();
+    if (!classFeeForm.Class) { showToast('Select a class.', 'err'); return; }
+    const chosenType = classFeeForm.Fee_Type === 'Other'
+      ? classFeeCustomType.trim()
+      : classFeeForm.Fee_Type;
+    if (!chosenType) { showToast('Enter a fee type label.', 'err'); return; }
+    setClassFeeLoading(true);
+    // Backend expects lowercase field names: cls, amount, feeType, note
+    const res = await api.saveClassFeeSetting({
+      cls:     classFeeForm.Class,
+      amount:  classFeeForm.Amount,
+      feeType: chosenType,
+      note:    classFeeForm.Note,
+    });
+    setClassFeeLoading(false);
+    showToast(res?.msg || (res?.ok ? 'Saved!' : 'Error saving.'), res?.ok ? 'ok' : 'err');
+    if (res?.ok) {
+      setClassFeeModal(false);
+      setClassFeeForm({ Class: '', Amount: '', Fee_Type: 'Monthly Fee', Note: '' });
+      setClassFeeCustomType('');
+      refreshClassFee();
+    }
+  }, [api, classFeeCustomType, classFeeForm, refreshClassFee, showToast]);
+
+  const downloadClassFeePdf = useCallback(() => {
+    const rows = classFeeStructure || [];
+    if (!rows.length) { showToast('No class fee structure to export.', 'err'); return; }
+    const body = rows.map((r) => [
+      `Class ${r.Class}`,
+      r.Amount === '' || r.Amount == null ? '—' : `Rs.${Number(r.Amount).toLocaleString('en-IN')}`,
+      r.Fee_Type || '—',
+      r.Note || '—',
+    ]);
+    downloadAttendancePdf({
+      title:    'Class-wise Fee Structure',
+      subtitle: `Generated: ${new Date().toLocaleDateString('en-IN')}`,
+      head:     ['Class', 'Amount', 'Fee Label', 'Note'],
+      body,
+      filename: 'class-fee-structure.pdf',
+    });
+    showToast('Class fee structure PDF downloaded.', 'ok');
+  }, [classFeeStructure, showToast]);
+
   if (loading && !fees) return <Spinner />;
 
   return (
@@ -377,194 +433,136 @@ export default function FeesPage() {
         onCancel={() => setConfirm(null)}
       />
 
-      {/* ── Add Fee Form ── */}
-      <Card>
-        <CardTitle>
-          <IconMoney size={16} strokeWidth={2} style={{ marginRight: 6, verticalAlign: 'middle' }} />
-          Add Fee Record
-        </CardTitle>
-        <form className="form-grid" onSubmit={submit}>
-          <div className="form-group">
-            <label>Student ID *</label>
-            <input name="sid" required onChange={handleStudentIdChange} placeholder="e.g. STU_1001" />
-            {lookupLoading && (
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Looking up…</span>
-            )}
-            {studentInfo && (
-              <span style={{ fontSize: '0.75rem', color: 'var(--success, #16a34a)', marginTop: 2, display: 'block' }}>
-                ✓ Found: {studentInfo.Name} — Roll {studentInfo.Roll_No ?? '—'} · Class {studentInfo.Class}-{studentInfo.Section}
-                {studentInfo.Phone ? ` · Ph: ${studentInfo.Phone}` : ''}
-              </span>
-            )}
-          </div>
 
-          <div className="form-group">
-            <label>Name *</label>
-            <input name="snm" required value={autoName} onChange={(e) => setAutoName(e.target.value)} placeholder="Auto-filled from Student ID" />
-          </div>
+      {/* ══════════════ Two-column layout ══════════════ */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 24, alignItems: 'start' }}>
 
-          <div className="form-group">
-            <label>Class</label>
-            <input name="cls" value={autoCls} onChange={(e) => setAutoCls(e.target.value)} placeholder="Auto-filled" />
-          </div>
-
-          <div className="form-group">
-            <label>Fee Type</label>
-            <select value={feeTypeSelected} onChange={(e) => setFeeTypeSelected(e.target.value)}>
-              {FEE_TYPE_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-            {feeTypeSelected === 'Other' && (
-              <>
-                <input
-                  style={{ marginTop: 8 }}
-                  value={customFeeType}
-                  onChange={(e) => setCustomFeeType(e.target.value)}
-                  placeholder="Enter custom fee label"
-                />
-                <textarea
-                  style={{ marginTop: 8 }}
-                  rows={2}
-                  value={customFeeDetail}
-                  onChange={(e) => setCustomFeeDetail(e.target.value)}
-                  placeholder="Add detail/description (saved to Firestore)"
-                />
-              </>
-            )}
-          </div>
-
-          <div className="form-group">
-            <label>Amount *</label>
-            <input name="amt" type="number" min={0} required value={autoAmt} onChange={(e) => setAutoAmt(e.target.value)} placeholder="Auto-filled from class settings" />
-          </div>
-
-          <div className="form-group">
-            <label>Due Date</label>
-            <input name="due" type="date" />
-          </div>
-
-          <div className="form-group">
-            <label>Status</label>
-            <select name="status">
-              <option>Pending</option>
-              <option>Paid</option>
-            </select>
-          </div>
-
-          {studentInfo && (
-            <div
-              className="form-group full"
-              style={{
-                background: 'var(--sidebar-bg, #f0f4ff)',
-                borderRadius: 6,
-                padding: '8px 12px',
-                fontSize: '0.82rem',
-                color: 'var(--text-muted)',
-              }}
-            >
-              <strong>Roll No:</strong> {studentInfo.Roll_No ?? '—'} &nbsp;|&nbsp;
-              <strong>Student:</strong> {studentInfo.Name} &nbsp;|&nbsp;
-              <strong>Class:</strong> {studentInfo.Class}-{studentInfo.Section} &nbsp;|&nbsp;
-              <strong>Father:</strong> {studentInfo.Father_Name || '—'} &nbsp;|&nbsp;
-              <strong>Phone:</strong> {studentInfo.Parent_WhatsApp || studentInfo.Phone || '—'}
-              <br />
-              <span style={{ color: 'var(--success, #16a34a)', marginTop: 4, display: 'inline-block' }}>
-                📱 A WhatsApp message will be sent to the parent automatically after saving.
-              </span>
+        {/* ── LEFT: Class-wise Fee Structure ── */}
+        <Card style={{ marginBottom: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+            <CardTitle style={{ margin: 0, padding: 0, border: 'none', fontSize: '1rem' }}>Class-wise Fee Structure</CardTitle>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => {
+                  setClassFeeForm({ Class: '', Amount: '', Fee_Type: 'Monthly Fee', Note: '' });
+                  setClassFeeCustomType('');
+                  setClassFeeModal(true);
+                }}
+              >
+                + Add / Update
+              </Button>
+              <Button size="sm" variant="ghost" onClick={downloadClassFeePdf}>
+                Download PDF
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => navigate('/class-fees')}
+                style={{ whiteSpace: 'nowrap' }}
+                title="Open full Class Fees Settings page"
+              >
+                Full Page →
+              </Button>
             </div>
-          )}
-
-          <div className="form-group full btn-row">
-            <Button type="submit">Save &amp; Notify</Button>
           </div>
-        </form>
-      </Card>
-
-      <Card>
-        <CardTitle>Class-wise Fee Structure</CardTitle>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 12 }}>
-          This shows which class has how much fee and which fee label is currently configured.
-        </p>
-        <div className="tbl-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Class</th>
-                <th>Amount</th>
-                <th>Fee Label</th>
-                <th>Note</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(classFeeStructure || []).length === 0 ? (
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 12 }}>
+            Configure fee amount and label for each class.
+          </p>
+          <div className="tbl-wrap">
+            <table>
+              <thead>
                 <tr>
-                  <td colSpan={4} className="empty" style={{ padding: 20 }}>
-                    No class fee structure saved yet.
-                  </td>
+                  <th>Class</th>
+                  <th>Amount</th>
+                  <th>Fee Label</th>
+                  <th>Note</th>
                 </tr>
-              ) : (
-                (classFeeStructure || []).map((r) => (
-                  <tr key={r.Class}>
-                    <td>Class {esc(r.Class)}</td>
-                    <td>{r.Amount === '' || r.Amount == null ? '—' : `₹${Number(r.Amount).toLocaleString('en-IN')}`}</td>
-                    <td>{esc(r.Fee_Type || '—')}</td>
-                    <td>{esc(r.Note || '—')}</td>
+              </thead>
+              <tbody>
+                {(classFeeStructure || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="empty" style={{ padding: 20 }}>
+                      No class fee structure saved yet.
+                    </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* ── Fee Records ── */}
-      <Card>
-        <SectionHeader
-          title="Fee Records"
-          actions={
-            <Button onClick={() => refresh()} size="sm" variant="ghost">
-              <IconRefresh size={14} /> Refresh
-            </Button>
-          }
-        />
-
-        {/* Payment success banner */}
-        <PaymentBanner info={paymentBanner} onClose={() => setPaymentBanner(null)} />
-
-        {/* Summary tiles */}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-          <SummaryTile label="Total Records" value={summary.total} />
-          <SummaryTile
-            label="Paid"
-            value={`${summary.paid} (₹${summary.paidAmt.toLocaleString('en-IN')})`}
-            color="var(--success, #16a34a)"
-          />
-          <SummaryTile
-            label="Pending"
-            value={`${summary.pending} (₹${summary.pendingAmt.toLocaleString('en-IN')})`}
-            color="var(--danger, #e53935)"
-          />
-          <SummaryTile
-            label="Total Amount"
-            value={`₹${summary.totalAmt.toLocaleString('en-IN')}`}
-          />
-        </div>
-
-        {/* Filter tabs + search */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div className="btn-row" style={{ margin: 0 }}>
-            <Button variant={mode === 'all' ? 'primary' : 'ghost'} size="sm" onClick={() => setMode('all')}>All</Button>
-            <Button variant={mode === 'pending' ? 'danger' : 'ghost'} size="sm" onClick={() => setMode('pending')}>Pending</Button>
-            <Button variant={mode === 'paid' ? 'success' : 'ghost'} size="sm" onClick={() => setMode('paid')}>Paid</Button>
+                ) : (
+                  (classFeeStructure || []).map((r) => (
+                    <tr
+                      key={r.Class}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        const ft = FEE_TYPE_OPTIONS.includes(r.Fee_Type) ? r.Fee_Type : 'Other';
+                        setClassFeeForm({
+                          Class: r.Class,
+                          Amount: r.Amount === '' || r.Amount == null ? '' : String(r.Amount),
+                          Fee_Type: ft,
+                          Note: r.Note || '',
+                        });
+                        setClassFeeCustomType(ft === 'Other' ? r.Fee_Type : '');
+                        setClassFeeModal(true);
+                      }}
+                      title="Click to edit this class fee"
+                    >
+                      <td style={{ fontWeight: 600 }}>Class {esc(r.Class)}</td>
+                      <td style={{ color: 'var(--success,#059669)', fontWeight: 700 }}>
+                        {r.Amount === '' || r.Amount == null ? '—' : `₹${Number(r.Amount).toLocaleString('en-IN')}`}
+                      </td>
+                      <td>{esc(r.Fee_Type || '—')}</td>
+                      <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{esc(r.Note || '—')}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-          <input
-            placeholder="Search student, ID, type…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: 1, minWidth: 160 }}
+        </Card>
+
+        {/* ── RIGHT: Fee Records ── */}
+        <Card style={{ marginBottom: 0 }}>
+          <SectionHeader
+            title="Fee Records"
+            actions={
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button onClick={() => setAddModalOpen(true)} size="sm" variant="primary">+ Add Fee</Button>
+                <Button onClick={() => refresh()} size="sm" variant="ghost">
+                  <IconRefresh size={14} /> Refresh
+                </Button>
+              </div>
+            }
           />
-        </div>
+
+          {/* Payment success banner */}
+          <PaymentBanner info={paymentBanner} onClose={() => setPaymentBanner(null)} />
+
+          {/* Summary tiles */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+            <SummaryTile label="Total Records" value={summary.total} />
+            <SummaryTile label="Paid" value={`${summary.paid} (₹${summary.paidAmt.toLocaleString('en-IN')})`} color="var(--success, #16a34a)" />
+            <SummaryTile label="Pending" value={`${summary.pending} (₹${summary.pendingAmt.toLocaleString('en-IN')})`} color="var(--danger, #e53935)" />
+            <SummaryTile label="Total Amt" value={`₹${summary.totalAmt.toLocaleString('en-IN')}`} />
+          </div>
+
+          {/* Filter tabs + search */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div className="btn-row" style={{ margin: 0 }}>
+              <Button variant={mode === 'all' ? 'primary' : 'ghost'} size="sm" onClick={() => setMode('all')}>All</Button>
+              <Button variant={mode === 'pending' ? 'danger' : 'ghost'} size="sm" onClick={() => setMode('pending')}>Pending</Button>
+              <Button variant={mode === 'paid' ? 'success' : 'ghost'} size="sm" onClick={() => setMode('paid')}>Paid</Button>
+            </div>
+            <input
+              placeholder="Search student, ID, type…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ flex: 1, minWidth: 140 }}
+            />
+            {(search || mode !== 'all') && (
+              <Button variant="ghost" onClick={() => { setSearch(''); setMode('all'); }} size="sm">
+                Clear
+              </Button>
+            )}
+          </div>
 
         <div className="tbl-wrap">
           <table>
@@ -685,7 +683,174 @@ export default function FeesPage() {
         </div>
 
         <PaginationBar page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
-      </Card>
+        </Card>
+      </div>{/* end two-column grid */}
+
+      {/* ── Class Fee Structure Add/Edit Modal ── */}
+      <Modal
+        open={classFeeModal}
+        title="Add / Update Class Fee"
+        onClose={() => setClassFeeModal(false)}
+      >
+        <form className="form-grid" onSubmit={saveClassFee}>
+          <div className="form-group">
+            <label>Class *</label>
+            <select
+              value={classFeeForm.Class}
+              onChange={(e) => setClassFeeForm((p) => ({ ...p, Class: e.target.value }))}
+              required
+            >
+              <option value="">-- Select Class --</option>
+              {[...Array(12)].map((_, i) => (
+                <option key={i + 1} value={String(i + 1)}>Class {i + 1}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Fee Amount (₹) *</label>
+            <input
+              type="number"
+              min={0}
+              required
+              value={classFeeForm.Amount}
+              onChange={(e) => setClassFeeForm((p) => ({ ...p, Amount: e.target.value }))}
+              placeholder="e.g. 1500"
+            />
+          </div>
+          <div className="form-group">
+            <label>Fee Type</label>
+            <select
+              value={classFeeForm.Fee_Type}
+              onChange={(e) => setClassFeeForm((p) => ({ ...p, Fee_Type: e.target.value }))}
+            >
+              {FEE_TYPE_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+            {classFeeForm.Fee_Type === 'Other' && (
+              <input
+                style={{ marginTop: 8 }}
+                value={classFeeCustomType}
+                onChange={(e) => setClassFeeCustomType(e.target.value)}
+                placeholder="Enter custom fee label"
+              />
+            )}
+          </div>
+          <div className="form-group">
+            <label>Note (optional)</label>
+            <input
+              value={classFeeForm.Note}
+              onChange={(e) => setClassFeeForm((p) => ({ ...p, Note: e.target.value }))}
+              placeholder="e.g. includes transport"
+            />
+          </div>
+          <div className="form-group full btn-row">
+            <Button type="submit" disabled={classFeeLoading}>
+              {classFeeLoading ? 'Saving…' : 'Save Class Fee'}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setClassFeeModal(false)}>Cancel</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={addModalOpen} title="Add Fee Record" onClose={() => setAddModalOpen(false)}>
+        <form className="form-grid" onSubmit={submit}>
+          <div className="form-group">
+            <label>Student ID *</label>
+            <input name="sid" required onChange={handleStudentIdChange} placeholder="e.g. STU_1001" />
+            {lookupLoading && (
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Looking up…</span>
+            )}
+            {studentInfo && (
+              <span style={{ fontSize: '0.75rem', color: 'var(--success, #16a34a)', marginTop: 2, display: 'block' }}>
+                ✓ Found: {studentInfo.Name} — Roll {studentInfo.Roll_No ?? '—'} · Class {studentInfo.Class}-{studentInfo.Section}
+                {studentInfo.Phone ? ` · Ph: ${studentInfo.Phone}` : ''}
+              </span>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label>Name *</label>
+            <input name="snm" required value={autoName} onChange={(e) => setAutoName(e.target.value)} placeholder="Auto-filled from Student ID" />
+          </div>
+
+          <div className="form-group">
+            <label>Class</label>
+            <input name="cls" value={autoCls} onChange={(e) => setAutoCls(e.target.value)} placeholder="Auto-filled" />
+          </div>
+
+          <div className="form-group">
+            <label>Fee Type</label>
+            <select value={feeTypeSelected} onChange={(e) => setFeeTypeSelected(e.target.value)}>
+              {FEE_TYPE_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+            {feeTypeSelected === 'Other' && (
+              <>
+                <input
+                  style={{ marginTop: 8 }}
+                  value={customFeeType}
+                  onChange={(e) => setCustomFeeType(e.target.value)}
+                  placeholder="Enter custom fee label"
+                />
+                <textarea
+                  style={{ marginTop: 8 }}
+                  rows={2}
+                  value={customFeeDetail}
+                  onChange={(e) => setCustomFeeDetail(e.target.value)}
+                  placeholder="Add detail/description (saved to Firestore)"
+                />
+              </>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label>Amount *</label>
+            <input name="amt" type="number" min={0} required value={autoAmt} onChange={(e) => setAutoAmt(e.target.value)} placeholder="Auto-filled from class settings" />
+          </div>
+
+          <div className="form-group">
+            <label>Due Date</label>
+            <input name="due" type="date" />
+          </div>
+
+          <div className="form-group">
+            <label>Status</label>
+            <select name="status">
+              <option>Pending</option>
+              <option>Paid</option>
+            </select>
+          </div>
+
+          {studentInfo && (
+            <div
+              className="form-group full"
+              style={{
+                background: 'var(--sidebar-bg, #f0f4ff)',
+                borderRadius: 6,
+                padding: '8px 12px',
+                fontSize: '0.82rem',
+                color: 'var(--text-muted)',
+              }}
+            >
+              <strong>Roll No:</strong> {studentInfo.Roll_No ?? '—'} &nbsp;|&nbsp;
+              <strong>Student:</strong> {studentInfo.Name} &nbsp;|&nbsp;
+              <strong>Class:</strong> {studentInfo.Class}-{studentInfo.Section} &nbsp;|&nbsp;
+              <strong>Father:</strong> {studentInfo.Father_Name || '—'} &nbsp;|&nbsp;
+              <strong>Phone:</strong> {studentInfo.Parent_WhatsApp || studentInfo.Phone || '—'}
+              <br />
+              <span style={{ color: 'var(--success, #16a34a)', marginTop: 4, display: 'inline-block' }}>
+                📱 A WhatsApp message will be sent to the parent automatically after saving.
+              </span>
+            </div>
+          )}
+
+          <div className="form-group full btn-row">
+            <Button type="submit">Save &amp; Notify</Button>
+          </div>
+        </form>
+      </Modal>
 
       <Modal open={!!editingFee} title="Edit Fee Record" onClose={() => setEditingFee(null)}>
         {editingFee && (

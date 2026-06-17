@@ -144,6 +144,7 @@ export default function StudentsPage() {
   }, [filtered, page]);
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
   const [edit, setEdit] = useState(null);
 
   // Photo state for add form
@@ -215,6 +216,7 @@ export default function StudentsPage() {
       if (res.ok) {
         e.target.reset();
         setAddPhoto('');
+        setAddModalOpen(false);
         refresh();
       }
     },
@@ -273,91 +275,18 @@ export default function StudentsPage() {
 
   return (
     <>
-      {isAdmin && (
-      <Card>
-        <CardTitle><IconPlus size={16} strokeWidth={2.5} style={{ verticalAlign: 'middle', marginRight: 6 }} />New Student Registration</CardTitle>
-        <form className="form-grid" onSubmit={addStudent}>
-          {/* Photo picker spans full width, centered */}
-          <div className="form-group full" style={{ display: 'flex', justifyContent: 'center' }}>
-            <PhotoPicker value={addPhoto} onChange={setAddPhoto} />
-          </div>
 
-          <div className="form-group">
-            <label>Full Name *</label>
-            <input name="name" required placeholder="Student name" />
-          </div>
-          <div className="form-group">
-            <label>Father&apos;s Name *</label>
-            <input name="father" required />
-          </div>
-          <div className="form-group">
-            <label>Mother&apos;s Name</label>
-            <input name="mother" />
-          </div>
-          <div className="form-group">
-            <label>Class *</label>
-            <select name="cls" required>
-              <option value="">-- Select --</option>
-              {[...Array(12)].map((_, i) => (
-                <option key={i + 1}>{i + 1}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Section *</label>
-            <select name="section" required>
-              <option value="">--</option>
-              {['A', 'B', 'C', 'D'].map((x) => (
-                <option key={x}>{x}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Academic year *</label>
-            <select name="academicYear" required defaultValue={ACADEMIC_YEAR}>
-              {ACADEMIC_YEAR_OPTIONS.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>DOB</label>
-            <input name="dob" type="date" />
-          </div>
-          <div className="form-group">
-            <label>Gender</label>
-            <select name="gender" defaultValue="Male">
-              <option>Male</option>
-              <option>Female</option>
-              <option>Other</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Phone</label>
-            <input name="phone" maxLength={10} />
-          </div>
-          <div className="form-group">
-            <label>Parent WhatsApp (optional)</label>
-            <input name="parentWhatsApp" maxLength={15} placeholder="10-digit; overrides Phone for alerts" />
-          </div>
-          <div className="form-group full">
-            <label>Address</label>
-            <textarea name="address" rows={2} />
-          </div>
-          <div className="form-group full btn-row">
-            <Button type="submit"><IconStudents size={15} strokeWidth={2} style={{ marginRight: 4 }} />Register Student</Button>
-          </div>
-        </form>
-      </Card>
-      )}
 
       <Card>
         <SectionHeader
           title="All Students"
           actions={(
             <div style={{ display: 'flex', gap: 8 }}>
+              {isAdmin && (
+                <Button onClick={() => setAddModalOpen(true)} size="sm" variant="primary">
+                  <IconPlus size={14} style={{ marginRight: 4 }} /> Add Student
+                </Button>
+              )}
               <Button onClick={downloadStudentsCsv} size="sm" variant="ghost">Download CSV</Button>
               <Button onClick={() => refresh()} size="sm" variant="ghost"><IconRefresh size={14} /> Refresh</Button>
             </div>
@@ -394,6 +323,21 @@ export default function StudentsPage() {
               ))}
             </select>
           </label>
+          {(q || fc || fs || fy) && (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setQ('');
+                setFc('');
+                setFs('');
+                setFy('');
+              }}
+              size="sm"
+              style={{ marginLeft: 'auto' }}
+            >
+              Clear
+            </Button>
+          )}
         </div>
         <div className="tbl-wrap">
           <table>
@@ -538,6 +482,83 @@ export default function StudentsPage() {
           </form>
         )}
       </Modal>
+      )}
+
+      {isAdmin && (
+        <Modal open={addModalOpen} title="New Student Registration" onClose={() => setAddModalOpen(false)}>
+          <form className="form-grid" onSubmit={addStudent}>
+            <div className="form-group full" style={{ display: 'flex', justifyContent: 'center' }}>
+              <PhotoPicker value={addPhoto} onChange={setAddPhoto} />
+            </div>
+            <div className="form-group">
+              <label>Full Name *</label>
+              <input name="name" required placeholder="Student name" />
+            </div>
+            <div className="form-group">
+              <label>Father&apos;s Name *</label>
+              <input name="father" required />
+            </div>
+            <div className="form-group">
+              <label>Mother&apos;s Name</label>
+              <input name="mother" />
+            </div>
+            <div className="form-group">
+              <label>Class *</label>
+              <select name="cls" required>
+                <option value="">-- Select --</option>
+                {[...Array(12)].map((_, i) => (
+                  <option key={i + 1}>{i + 1}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Section *</label>
+              <select name="section" required>
+                <option value="">--</option>
+                {['A', 'B', 'C', 'D'].map((x) => (
+                  <option key={x}>{x}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Academic year *</label>
+              <select name="academicYear" required defaultValue={ACADEMIC_YEAR}>
+                {ACADEMIC_YEAR_OPTIONS.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>DOB</label>
+              <input name="dob" type="date" />
+            </div>
+            <div className="form-group">
+              <label>Gender</label>
+              <select name="gender" defaultValue="Male">
+                <option>Male</option>
+                <option>Female</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Phone</label>
+              <input name="phone" maxLength={10} />
+            </div>
+            <div className="form-group">
+              <label>Parent WhatsApp (optional)</label>
+              <input name="parentWhatsApp" maxLength={15} placeholder="10-digit; overrides Phone for alerts" />
+            </div>
+            <div className="form-group full">
+              <label>Address</label>
+              <textarea name="address" rows={2} />
+            </div>
+            <div className="form-group full btn-row">
+              <Button type="submit"><IconStudents size={15} strokeWidth={2} style={{ marginRight: 4 }} />Register Student</Button>
+            </div>
+          </form>
+        </Modal>
       )}
     </>
   );

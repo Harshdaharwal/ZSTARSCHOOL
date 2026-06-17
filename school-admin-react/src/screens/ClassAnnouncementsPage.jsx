@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardTitle } from '../components/common/Card.jsx';
 import { Button } from '../components/common/Button.jsx';
 import { Badge } from '../components/common/Badge.jsx';
+import { Modal } from '../components/common/Modal.jsx';
 import { SectionHeader } from '../components/common/SectionHeader.jsx';
 import { Spinner } from '../components/common/Spinner.jsx';
 import { IconClassNotices, IconRefresh, IconDocument, IconSchool, IconBell, IconCalendar, IconWarning } from '../components/common/Icons.jsx';
@@ -51,6 +52,7 @@ export default function ClassAnnouncementsPage() {
   const [selSection, setSelSection] = useState('');
   const [posting, setPosting] = useState(false);
   const [confirm, setConfirm] = useState(null);
+  const [addModalOpen, setAddModalOpen] = useState(false);
 
   // Pre-fill class for teacher on load
   useEffect(() => {
@@ -97,6 +99,7 @@ export default function ClassAnnouncementsPage() {
       showToast(res.msg, res.ok ? 'ok' : 'err');
       if (res.ok) {
         e.target.reset();
+        setAddModalOpen(false);
         refresh();
       }
     },
@@ -128,9 +131,12 @@ export default function ClassAnnouncementsPage() {
       <SectionHeader
         title="Class Announcements"
         actions={
-          <Button variant="ghost" size="sm" onClick={refresh}>
-            <IconRefresh size={14} /> Refresh
-          </Button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button onClick={() => setAddModalOpen(true)} size="sm" variant="primary">New Announcement</Button>
+            <Button variant="ghost" size="sm" onClick={refresh}>
+              <IconRefresh size={14} /> Refresh
+            </Button>
+          </div>
         }
       />
 
@@ -138,56 +144,6 @@ export default function ClassAnnouncementsPage() {
         Post a class-specific notice. Parents of students in that class will be notified via WhatsApp.
       </p>
 
-      {/* ── Post Form ── */}
-      <Card style={{ marginBottom: 24 }}>
-        <CardTitle><IconDocument size={16} strokeWidth={2} style={{ marginRight: 6, verticalAlign: 'middle' }} />New Class Announcement</CardTitle>
-
-        <div className="form-group" style={{ marginBottom: 16, maxWidth: 320 }}>
-          <label style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: 6, display: 'block' }}>
-            Target Class *
-          </label>
-          <select
-            value={selClass && selSection ? `${selClass}|${selSection}` : ''}
-            onChange={handleClassChange}
-            style={{ width: '100%' }}
-          >
-            <option value="">— Select class —</option>
-            {classOptions.map((c) => (
-              <option key={`${c.Class}|${c.Section}`} value={`${c.Class}|${c.Section}`}>
-                Class {c.Class}-{c.Section}
-              </option>
-            ))}
-          </select>
-          {!isAdmin && teacherProfile && (
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
-              (Default: Your assigned class {teacherProfile.Class_Assigned}-{teacherProfile.Section_Assigned})
-            </p>
-          )}
-        </div>
-
-        <form className="form-grid" onSubmit={submit}>
-          <div className="form-group full">
-            <label>Title *</label>
-            <input name="title" required placeholder="Short headline…" />
-          </div>
-          <div className="form-group full">
-            <label>Message *</label>
-            <textarea name="body" required rows={4} placeholder="Full details for parents and students…" />
-          </div>
-          <div className="form-group">
-            <label>Priority</label>
-            <select name="priority" defaultValue="Normal">
-              <option value="Normal">Normal</option>
-              <option value="High">High</option>
-            </select>
-          </div>
-          <div className="form-group full btn-row">
-            <Button type="submit" disabled={posting || (!selClass && !selSection)}>
-              {posting ? 'Posting…' : <><IconBell size={15} style={{ marginRight: 4 }} />Post &amp; Notify Parents</>}
-            </Button>
-          </div>
-        </form>
-      </Card>
 
       {/* ── Announcements List ── */}
       <Card>
@@ -274,6 +230,54 @@ export default function ClassAnnouncementsPage() {
         onConfirm={confirm?.onConfirm}
         onCancel={() => setConfirm(null)}
       />
+
+      <Modal open={addModalOpen} title="New Class Announcement" onClose={() => setAddModalOpen(false)}>
+        <div className="form-group" style={{ marginBottom: 16, maxWidth: 320 }}>
+          <label style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: 6, display: 'block' }}>
+            Target Class *
+          </label>
+          <select
+            value={selClass && selSection ? `${selClass}|${selSection}` : ''}
+            onChange={handleClassChange}
+            style={{ width: '100%' }}
+          >
+            <option value="">— Select class —</option>
+            {classOptions.map((c) => (
+              <option key={`${c.Class}|${c.Section}`} value={`${c.Class}|${c.Section}`}>
+                Class {c.Class}-{c.Section}
+              </option>
+            ))}
+          </select>
+          {!isAdmin && teacherProfile && (
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
+              (Default: Your assigned class {teacherProfile.Class_Assigned}-{teacherProfile.Section_Assigned})
+            </p>
+          )}
+        </div>
+
+        <form className="form-grid" onSubmit={submit}>
+          <div className="form-group full">
+            <label>Title *</label>
+            <input name="title" required placeholder="Short headline…" />
+          </div>
+          <div className="form-group full">
+            <label>Message *</label>
+            <textarea name="body" required rows={4} placeholder="Full details for parents and students…" />
+          </div>
+          <div className="form-group">
+            <label>Priority</label>
+            <select name="priority" defaultValue="Normal">
+              <option value="Normal">Normal</option>
+              <option value="High">High</option>
+            </select>
+          </div>
+          <div className="form-group full btn-row">
+            <Button type="submit" disabled={posting || (!selClass && !selSection)}>
+              {posting ? 'Posting…' : <><IconBell size={15} style={{ marginRight: 4 }} />Post &amp; Notify Parents</>}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </>
   );
 }
