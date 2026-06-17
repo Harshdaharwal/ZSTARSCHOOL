@@ -1,14 +1,15 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Sidebar } from './Sidebar.jsx';
 import { Topbar } from './Topbar.jsx';
 import { OfflineBanner } from '../common/OfflineBanner.jsx';
+import { useAuth } from '../../hooks/useAuth.js';
 import {
   IconDashboard, IconStudents, IconTeachers, IconClasses,
   IconAttendanceStudents, IconAttendanceTeachers, IconFees, IconClassFees,
   IconExams, IconMarks, IconResults, IconTimetables, IconAnnouncements, IconSettings,
-  IconCalendar,
+  IconCalendar, IconMenu,
 } from '../common/Icons.jsx';
 
 const ROUTE_META = [
@@ -29,17 +30,61 @@ const ROUTE_META = [
   { path: '/settings', Icon: IconSettings, key: 'nav.settings' },
 ];
 
+/* Bottom nav — 4 primary tabs + "More" that opens sidebar sheet */
+function MobileBottomNav({ onMoreClick, moreOpen }) {
+  const { t } = useTranslation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
+  const tabs = useMemo(() => [
+    { to: '/', Icon: IconDashboard, label: 'Home', end: true },
+    { to: '/students', Icon: IconStudents, label: 'Students' },
+    ...(isAdmin ? [{ to: '/fees', Icon: IconFees, label: 'Fees' }] : []),
+    { to: '/attendance/students', Icon: IconAttendanceStudents, label: 'Attend.' },
+  ], [isAdmin]);
+
+  return (
+    <nav className="mob-bottom-nav" aria-label="Mobile navigation">
+      {tabs.map(({ to, Icon, label, end }) => (
+        <NavLink
+          key={to}
+          to={to}
+          end={end}
+          className={({ isActive }) => 'mob-nav-tab' + (isActive ? ' mob-nav-tab--active' : '')}
+        >
+          {({ isActive }) => (
+            <>
+              <span className="mob-nav-icon-wrap">
+                {isActive && <span className="mob-nav-glow" />}
+                <Icon size={22} strokeWidth={isActive ? 2.2 : 1.7} />
+              </span>
+              <span className="mob-nav-label">{label}</span>
+            </>
+          )}
+        </NavLink>
+      ))}
+      <button
+        className={'mob-nav-tab mob-nav-more' + (moreOpen ? ' mob-nav-tab--active' : '')}
+        onClick={onMoreClick}
+        aria-label={t('nav.menu')}
+      >
+        <span className="mob-nav-icon-wrap">
+          {moreOpen && <span className="mob-nav-glow" />}
+          <IconMenu size={22} strokeWidth={moreOpen ? 2.2 : 1.7} />
+        </span>
+        <span className="mob-nav-label">More</span>
+      </button>
+    </nav>
+  );
+}
+
 const AppLayout = memo(function AppLayout() {
   const loc = useLocation();
   const { t } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Close sidebar on route change (mobile nav)
-  useEffect(() => {
-    setSidebarOpen(false);
-  }, [loc.pathname]);
+  useEffect(() => { setSidebarOpen(false); }, [loc.pathname]);
 
-  // Close sidebar when pressing Escape
   useEffect(() => {
     if (!sidebarOpen) return;
     const handler = (e) => { if (e.key === 'Escape') setSidebarOpen(false); };
@@ -55,18 +100,14 @@ const AppLayout = memo(function AppLayout() {
 
   return (
     <>
-      <a href="#main-content" className="skip-link">
-        {t('a11y.skip')}
-      </a>
-      {/* Mobile overlay */}
+      <a href="#main-content" className="skip-link">{t('a11y.skip')}</a>
+
       {sidebarOpen && (
-        <div
-          className="sidebar-overlay"
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
-        />
+        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
       )}
+
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
       <div className="main">
         <Topbar meta={meta} onMenuToggle={toggleSidebar} />
         <OfflineBanner />
@@ -74,6 +115,9 @@ const AppLayout = memo(function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Mobile-only bottom nav */}
+      <MobileBottomNav onMoreClick={toggleSidebar} moreOpen={sidebarOpen} />
     </>
   );
 });
