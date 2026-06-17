@@ -1,0 +1,5 @@
+{
+  "buildCommand": "cd school-admin-react && npm install && npm run build",
+  "outputDirectory": "school-admin-react/dist",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
