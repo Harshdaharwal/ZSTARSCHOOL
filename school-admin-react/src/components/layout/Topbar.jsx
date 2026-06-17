@@ -48,32 +48,43 @@ export const Topbar = memo(function Topbar({ meta, onMenuToggle }) {
           </button>
         )}
         <span className="topbar-title">
-          <PageIcon size={20} strokeWidth={2} />
+          <PageIcon size={18} strokeWidth={2} />
           {pageTitle}
         </span>
       </div>
+
       <div className="topbar-right">
+        {/* Desktop only: user badge + email */}
         {user && (
-          <span className="topbar-user" title={user.email}>
+          <span className="topbar-user topbar-desktop-only" title={user.email}>
             <span className="topbar-badge">{roleLabel}</span>
             <span className="topbar-email">{user.email}</span>
           </span>
         )}
-        <Button
+
+        {/* Theme toggle — icon + text on desktop, icon-only on mobile */}
+        <button
           type="button"
-          variant="ghost"
-          size="sm"
+          className="topbar-icon-btn"
           onClick={toggleMode}
           title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label={isDark ? 'Light mode' : 'Dark mode'}
         >
-          {isDark ? <IconSun size={15} /> : <IconMoon size={15} />}
-          {isDark ? 'Light' : 'Dark'}
-        </Button>
-        <span className="topbar-date">{dateStr}</span>
-        <Button type="button" variant="ghost" size="sm" onClick={onLogout}>
-          <IconLogout size={15} />
-          {t('topbar.logout')}
-        </Button>
+          {isDark ? <IconSun size={17} /> : <IconMoon size={17} />}
+          <span className="topbar-btn-label">{isDark ? 'Light' : 'Dark'}</span>
+        </button>
+
+        {/* Desktop only: date + logout */}
+        <span className="topbar-date topbar-desktop-only">{dateStr}</span>
+        <button
+          type="button"
+          className="topbar-icon-btn topbar-desktop-only"
+          onClick={onLogout}
+          title={t('topbar.logout')}
+        >
+          <IconLogout size={17} />
+          <span className="topbar-btn-label">{t('topbar.logout')}</span>
+        </button>
       </div>
     </header>
   );

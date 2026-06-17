@@ -1,14 +1,15 @@
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth.js';
+import { useColorMode } from '../../hooks/useColorMode.js';
 import { ACADEMIC_YEAR } from '../../config/schoolConfig.js';
 import {
   IconDashboard, IconStudents, IconTeachers, IconClasses,
   IconAttendanceStudents, IconAttendanceTeachers, IconFees, IconClassFees,
   IconSalary, IconExams, IconMarks, IconResults, IconClassNotices,
   IconTimetables, IconAnnouncements, IconSettings, IconClose, IconSchool, IconBriefcase,
-  IconCalendar, IconWhatsApp, IconAlertCircle, IconCertificate,
+  IconCalendar, IconWhatsApp, IconAlertCircle, IconCertificate, IconLogout, IconMoon, IconSun,
 } from '../common/Icons.jsx';
 
 const ALL_LINKS = [
@@ -36,7 +37,9 @@ const ALL_LINKS = [
 
 export const Sidebar = memo(function Sidebar({ open, onClose }) {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const { isDark, toggleMode } = useColorMode();
+  const navigate = useNavigate();
   const isAdmin = user?.role === 'admin';
 
   const links = useMemo(
@@ -49,37 +52,72 @@ export const Sidebar = memo(function Sidebar({ open, onClose }) {
     [isAdmin, user?.role]
   );
 
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
+
+  const initials = user?.email
+    ? user.email.slice(0, 2).toUpperCase()
+    : 'U';
+  const roleLabel = user?.role === 'admin' ? 'Administrator' : user?.role === 'teacher' ? 'Teacher' : '';
+
   return (
     <aside className={'sidebar' + (open ? ' sidebar-mobile-open' : '')} aria-label={t('nav.menu')}>
+      {/* Logo header */}
       <div className="logo">
-        <IconSchool size={26} className="logo-icon" strokeWidth={1.8} />
+        <IconSchool size={24} className="logo-icon" strokeWidth={1.8} />
         <span className="logo-text">{t('schoolName')}</span>
         {onClose && (
-          <button
-            type="button"
-            className="sidebar-close-btn"
-            onClick={onClose}
-            aria-label="Close menu"
-          >
-            <IconClose size={16} />
+          <button type="button" className="sidebar-close-btn" onClick={onClose} aria-label="Close menu">
+            <IconClose size={15} />
           </button>
         )}
       </div>
-      <div className="nav-year" aria-hidden>
-        {ACADEMIC_YEAR}
-      </div>
+
+      <div className="nav-year" aria-hidden>{ACADEMIC_YEAR}</div>
       <div className="nav-sec-label">{t('nav.menu')}</div>
-      {links.map((l) => (
-        <NavLink
-          key={l.to}
-          to={l.to}
-          end={l.end}
-          className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
-        >
-          <span className="nav-icon"><l.Icon size={18} strokeWidth={1.8} /></span>
-          <span>{t(l.labelKey)}</span>
-        </NavLink>
-      ))}
+
+      {/* Nav links — scrollable */}
+      <div className="sidebar-nav-scroll">
+        {links.map((l) => (
+          <NavLink
+            key={l.to}
+            to={l.to}
+            end={l.end}
+            className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
+          >
+            <span className="nav-icon"><l.Icon size={17} strokeWidth={1.8} /></span>
+            <span>{t(l.labelKey)}</span>
+          </NavLink>
+        ))}
+      </div>
+
+      {/* Bottom section: theme toggle + user profile + logout */}
+      <div className="sidebar-bottom">
+        {/* Theme toggle */}
+        <button className="sidebar-theme-btn" onClick={toggleMode} type="button">
+          {isDark ? <IconSun size={15} /> : <IconMoon size={15} />}
+          <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>
+        </button>
+
+        {/* User profile */}
+        {user && (
+          <div className="sidebar-profile">
+            <div className="sidebar-avatar">{initials}</div>
+            <div className="sidebar-profile-info">
+              <div className="sidebar-profile-role">{roleLabel}</div>
+              <div className="sidebar-profile-email">{user.email}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Logout */}
+        <button className="sidebar-logout-btn" onClick={handleLogout} type="button">
+          <IconLogout size={16} />
+          <span>{t('topbar.logout')}</span>
+        </button>
+      </div>
     </aside>
   );
 });
