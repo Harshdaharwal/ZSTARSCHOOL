@@ -44,11 +44,11 @@ export const Topbar = memo(function Topbar({ meta, onMenuToggle }) {
             onClick={onMenuToggle}
             aria-label="Toggle menu"
           >
-            <IconMenu size={20} />
+            <IconMenu size={18} />
           </button>
         )}
         <span className="topbar-title">
-          <PageIcon size={18} strokeWidth={2} />
+          <PageIcon size={16} strokeWidth={2} />
           {pageTitle}
         </span>
       </div>

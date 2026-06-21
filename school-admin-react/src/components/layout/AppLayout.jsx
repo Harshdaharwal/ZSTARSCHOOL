@@ -55,8 +55,7 @@ function MobileBottomNav({ onMoreClick, moreOpen }) {
           {({ isActive }) => (
             <>
               <span className="mob-nav-icon-wrap">
-                {isActive && <span className="mob-nav-glow" />}
-                <Icon size={22} strokeWidth={isActive ? 2.2 : 1.7} />
+                <Icon size={20} strokeWidth={isActive ? 2.2 : 1.6} />
               </span>
               <span className="mob-nav-label">{label}</span>
             </>
@@ -69,8 +68,7 @@ function MobileBottomNav({ onMoreClick, moreOpen }) {
         aria-label={t('nav.menu')}
       >
         <span className="mob-nav-icon-wrap">
-          {moreOpen && <span className="mob-nav-glow" />}
-          <IconMenu size={22} strokeWidth={moreOpen ? 2.2 : 1.7} />
+          <IconMenu size={20} strokeWidth={moreOpen ? 2.2 : 1.6} />
         </span>
         <span className="mob-nav-label">More</span>
       </button>
