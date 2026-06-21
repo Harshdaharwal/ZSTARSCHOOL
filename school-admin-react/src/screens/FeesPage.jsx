@@ -435,7 +435,7 @@ export default function FeesPage() {
 
 
       {/* ══════════════ Two-column layout ══════════════ */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 24, alignItems: 'start' }}>
+      <div className="fees-two-col">
 
         {/* ── LEFT: Class-wise Fee Structure ── */}
         <Card style={{ marginBottom: 0 }}>

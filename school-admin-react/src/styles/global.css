@@ -219,6 +219,11 @@ textarea { resize: vertical; min-height: 80px; }
 
 .btn-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
 .sec-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+.sec-hdr-title { font-size: 1rem; font-weight: 800; color: var(--primary); }
+.sec-hdr-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Fees two-column layout — collapses on mobile */
+.fees-two-col { display: grid; grid-template-columns: 1fr 1.6fr; gap: 24px; align-items: start; }
 
 .tbl-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); background: var(--card); }
 table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
@@ -937,7 +942,16 @@ tbody tr { transition: background 0.15s; }
   .btn-row { gap: 7px; flex-wrap: wrap; margin-top: 11px; }
 
   /* ── Section header ── */
-  .sec-hdr { gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .sec-hdr { gap: 6px; margin-bottom: 12px; flex-wrap: wrap; align-items: flex-start; }
+  .sec-hdr-title { font-size: 0.88rem; }
+  .sec-hdr-actions {
+    display: flex; align-items: center;
+    gap: 6px; flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  /* Fees two-column → single column on mobile */
+  .fees-two-col { grid-template-columns: 1fr; gap: 12px; }
 
   /* ── Filter tabs ── */
   .filter-tabs { gap: 6px; padding-bottom: 12px; margin-bottom: 13px; scrollbar-width: none; -ms-overflow-style: none; }
@@ -1104,7 +1118,9 @@ tbody tr { transition: background 0.15s; }
   .btn-sm { padding: 6px 10px; font-size: 0.71rem; }
   .pct-badge { padding: 3px 7px; font-size: 0.66rem; }
   .att-bar-bg { width: 50px; }
-  .sec-hdr { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .sec-hdr { flex-direction: column; align-items: flex-start; gap: 5px; }
+  .sec-hdr-title { font-size: 0.84rem; }
+  .sec-hdr-actions { gap: 5px; }
 
   .mob-nav-icon-wrap { width: 30px; height: 24px; border-radius: 7px; }
   .mob-nav-label { font-size: 0.51rem; }
