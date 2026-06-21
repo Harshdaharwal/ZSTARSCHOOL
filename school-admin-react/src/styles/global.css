@@ -221,6 +221,8 @@ textarea { resize: vertical; min-height: 80px; }
 .sec-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
 .sec-hdr-title { font-size: 1rem; font-weight: 800; color: var(--primary); }
 .sec-hdr-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Inner div passed as actions prop: also wrap on any screen */
+.sec-hdr-actions > div { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 
 /* Fees two-column layout — collapses on mobile */
 .fees-two-col { display: grid; grid-template-columns: 1fr 1.6fr; gap: 24px; align-items: start; }
@@ -949,6 +951,19 @@ tbody tr { transition: background 0.15s; }
     gap: 6px; flex-wrap: wrap;
     max-width: 100%;
   }
+  .sec-hdr-actions > div { flex-wrap: wrap; gap: 6px; }
+  /* filter-bar: selects + inputs fill full width (override inline minWidth) */
+  .filter-bar select { width: 100%; min-width: 0 !important; }
+  .filter-bar input { width: 100%; min-width: 0 !important; }
+  .filter-bar > div:not(.filter-label-inline) { flex-wrap: wrap; }
+  /* sec-hdr-actions inputs (ExamsPage search, etc.) take remaining space */
+  .sec-hdr-actions input { flex: 1; min-width: 0 !important; }
+  .sec-hdr-actions select { flex: 1; min-width: 0 !important; }
+  /* announcement/article card rows: stack on mobile */
+  article > div { flex-wrap: wrap !important; }
+  article > div > div:last-child { flex-shrink: 1 !important; }
+  /* table action cell: allow wrap so buttons don't force wide row */
+  .tbl-wrap tbody td:last-child { white-space: normal !important; }
 
   /* Fees two-column → single column on mobile */
   .fees-two-col { grid-template-columns: 1fr; gap: 12px; }

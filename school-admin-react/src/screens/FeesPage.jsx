@@ -441,7 +441,7 @@ export default function FeesPage() {
         <Card style={{ marginBottom: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
             <CardTitle style={{ margin: 0, padding: 0, border: 'none', fontSize: '1rem' }}>Class-wise Fee Structure</CardTitle>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <Button
                 size="sm"
                 variant="primary"
@@ -460,7 +460,6 @@ export default function FeesPage() {
                 size="sm"
                 variant="ghost"
                 onClick={() => navigate('/class-fees')}
-                style={{ whiteSpace: 'nowrap' }}
                 title="Open full Class Fees Settings page"
               >
                 Full Page →
@@ -524,7 +523,7 @@ export default function FeesPage() {
           <SectionHeader
             title="Fee Records"
             actions={
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <Button onClick={() => setAddModalOpen(true)} size="sm" variant="primary">+ Add Fee</Button>
                 <Button onClick={() => refresh()} size="sm" variant="ghost">
                   <IconRefresh size={14} /> Refresh
